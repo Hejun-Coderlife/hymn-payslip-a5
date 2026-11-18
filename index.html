@@ -88,7 +88,18 @@ button,input,select{font:inherit;color:inherit}
 .sec .tag2{font-family:var(--sans);font-size:12px;color:var(--t3);letter-spacing:0}
 #pages{display:flex;flex-wrap:wrap;gap:28px;padding:28px;background:var(--paper);border-top:1px solid var(--acc)}
 
-/* ===== A5 工资单 ===== */
+/* ===== A5 横版工资单（照用户样式图） ===== */
+.hs{border-collapse:collapse;font-family:"SimSun","Songti SC",serif;font-size:8pt;white-space:nowrap}
+.hs td,.hs th{border:0.6pt solid #000;padding:1.6mm 1mm;text-align:center;vertical-align:middle}
+.hs th{font-weight:bold;white-space:normal;width:13mm;line-height:1.2}
+.hs th:first-child{width:6mm}
+.hs th.pe,.hs td.n{min-width:13mm}
+.hs .t td{font-size:12pt;font-weight:bold;padding:1.8mm}
+.hs .blue{background:#00b0f0}.hs .red{background:#f00;font-weight:normal;font-size:9pt}.hs .nob{border:0}
+.hs th.pe{background:#fce4d6}
+.hs td.green{background:#92d050}
+.hs td.n{font-variant-numeric:tabular-nums}.hs td.neg{color:#c00}.hs td.b{font-weight:bold}
+/* ===== A5 工资单（旧竖版样式） ===== */
 .page{width:148mm;height:210mm;background:#fff;border:1px solid var(--line-2);padding:10mm 9mm 8mm;overflow:hidden;position:relative}
 .page.land{width:210mm;height:148mm}
 .page .inner{transform-origin:top left}
@@ -201,7 +212,7 @@ button,input,select{font:inherit;color:inherit}
     <div class="filters">
       <span class="fseg" id="fRegion"></span>
       <span class="xsel" id="msWrap"><button type="button" class="inp xsel-btn" id="fStore">全部门店</button></span>
-      <label class="tgl"><input type="checkbox" id="showAll"> 显示全为 0 的项目</label>
+      <label class="tgl"><input type="checkbox" id="showAll"> 隐藏全店为 0 的列</label>
       <span class="cnt" id="info"></span>
     </div>
     <div class="kpirow" id="kpi"></div>
@@ -306,85 +317,71 @@ function visibleStores() {
   const r = REGION;
   return stores().filter(g => (!r || g.region === r) && (!SEL.size || SEL.has(g.store)));
 }
-function rowsFor(g) {
-  const showAll = $('#showAll').checked;
-  const items = DATA.items.filter(it => showAll || ALWAYS.includes(it) || g.people.some(p => p.vals[it] !== 0));
-  const info = DATA.info.filter(it => g.people.some(p => p.info[it]));
-  return { items, info };
+// 横版列（2026-11-18 用户给的样式图）：实发、考勤 + 这些项目 + 实发
+const COLS = ['考勤', '综合月薪', '津贴', '个人业绩提成总额', '合伙人医美产康激励5%', '后院手工费', '线上绩效激励', '拓卡',
+  '工龄津贴', '微信激励', '贴花', '转岗激励', '高温补贴', '总店业绩激励', '社保（个人）', '社保（单位）-个人承担', '社保（单位）-单位承担'];
+const PEACH_FROM = '综合月薪';
+function colsFor(g) {
+  const hide = $('#showAll').checked;   // 勾上 = 隐藏全店为 0 的列
+  const cols = COLS.filter(c => DATA.items.includes(c) || c === '考勤')
+    .filter(c => !hide || ALWAYS.includes(c) || g.people.some(p => (p.vals[c] || 0) !== 0));
+  return ['实发', ...cols, '实发'];
 }
+function rowsFor(g) { return { items: colsFor(g), info: [] }; }
 const fmt = n => n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-
-// 竖版 / 横版各算一遍缩放比例，选字更大的那个（行多时竖版更好，人多行少时横版更好）
-function pickLand(people, rows) {
-  const k = people, n = rows;
-  const sc = (PW, PH) => {
-    const W = 18 + k * Math.max(10, (PW - 18) / k);
-    const H = 82 + n * Math.max(15, Math.min(40, (PH - 82) / n));
-    return Math.min(1, PW / W, PH / H);
-  };
-  return sc(105, 368) > sc(70, 544) + 0.02;
-}
-/* ---------- 预览 ---------- */
+/* ---------- 预览（横版，跟导出的 Excel 一个样） ---------- */
+const v2 = v => v ? v.toFixed(2) : '';
 function render() {
   const box = $('#pages');
   box.innerHTML = '';
   if (!DATA) return;
   const list = visibleStores();
-  const m = (DATA.title || '').match(/(\d{4})年(\d{1,2})月/);
-  const period = m ? `${m[1]} · ${m[2].padStart(2, '0')}` : '';
   for (const g of list) {
-    const { items, info } = rowsFor(g);
-    const multi = g.people.length > 1;
-    const nCols = g.people.length + (multi ? 1 : 0);
-    const land = pickLand(nCols, items.length + info.length + 6);
-    const labelW = land ? 20 : 29;
-    const cols = `<col style="width:${labelW}%">` + `<col>`.repeat(nCols);
-    const cell = (v, extra = '') => `<td class="v${v === 0 ? ' zero' : ''}${v < 0 ? ' neg' : ''}${extra}">${fmt(v)}</td>`;
-    let h = `<div class="sh"><img src="vendor/logo-ink.png" alt="赫眉 HYMN"><div class="r"><div class="t">${m ? `${+m[2]} 月工资单` : esc(DATA.title || '工资单')}</div><div class="s">PAYSLIP${period ? ' · ' + period : ''}</div></div></div>`;
-    h += `<div class="meta"><span>门店 <b>${esc(g.store)}</b></span><span>区域经理 <b>${esc(g.region)}</b></span>${DATA.days ? `<span>应出勤 <b class="num">${DATA.days}</b> 天</span>` : ''}</div>`;
-    h += `<table class="slip"><colgroup>${cols}</colgroup>`;
-    h += `<tr><th class="k">项目</th>${g.people.map(p => `<th>${esc(p.name)}</th>`).join('')}${multi ? '<th class="sum">合计</th>' : ''}</tr>`;
-    h += `<tr class="role"><td class="k">职位</td>${g.people.map(p => `<td>${esc(p.role || '—')}</td>`).join('')}${multi ? '<td class="sum"></td>' : ''}</tr>`;
-    for (const it of items) {
-      const vs = g.people.map(p => p.vals[it]);
-      const sum = vs.reduce((a, b) => a + b, 0);
-      h += `<tr${it === '实发' ? ' class="net"' : ''}><td class="k">${esc(it)}</td>${vs.map(v => cell(v)).join('')}${multi ? (NO_SUM.includes(it) ? '<td class="sum"></td>' : cell(sum, ' sum')) : ''}</tr>`;
-    }
-    h += `<tr class="gap"><td colspan="${nCols + 1}"></td></tr>`;
-    for (const it of info) {
-      h += `<tr class="infor"><td class="k">${esc(it)}</td>${g.people.map(p => `<td>${esc(p.info[it] || '')}</td>`).join('')}${multi ? '<td></td>' : ''}</tr>`;
-    }
-    h += `<tr class="sign"><td class="k">本人签字</td>${g.people.map(() => '<td></td>').join('')}${multi ? '<td></td>' : ''}</tr>`;
-    h += `</table>`;
-
+    const cols = colsFor(g), N = 5 + cols.length;
+    const red = Math.min(5, Math.max(0, N - 10)), blue = N - red - Math.min(5, N - red - 5);
+    let h = `<table class="hs"><tr class="t"><td colspan="${blue}" class="blue">${esc(DATA.title || '工资单')}</td>`;
+    if (red) h += `<td colspan="${red}" class="red">${DATA.days || ''}</td>`;
+    if (N - blue - red) h += `<td colspan="${N - blue - red}" class="nob"></td>`;
+    h += `</tr><tr class="hd"><th></th><th></th><th>门店</th><th>区域经理</th><th>职位</th>`;
+    let peach = false;
+    cols.forEach((c, i) => { if (c === PEACH_FROM) peach = true; if (i === cols.length - 1) peach = false; h += `<th${peach ? ' class="pe"' : ''}>${esc(c)}</th>`; });
+    h += '</tr>';
+    g.people.forEach((p, k) => {
+      h += `<tr><td class="b">${k + 1}</td><td>${esc(p.name)}</td><td>${esc(p.store)}</td><td>${esc(p.region)}</td><td>${esc(p.role)}</td>`;
+      cols.forEach((c, i) => {
+        const v = p.vals[c] || 0;
+        h += `<td class="n${i === 0 ? ' green' : ''}${v < 0 ? ' neg' : ''}">${c === '考勤' ? (v || '') : v2(v)}</td>`;
+      });
+      h += '</tr>';
+    });
+    h += `<tr><td></td><td>小计</td><td class="b">合计</td><td></td><td></td>`;
+    cols.forEach(c => { const sm = g.people.reduce((a, p) => a + (p.vals[c] || 0), 0); h += `<td class="n${sm < 0 ? ' neg' : ''}">${sm.toFixed(2)}</td>`; });
+    h += '</tr></table>';
     const page = document.createElement('div');
-    page.className = 'page' + (land ? ' land' : '') + (items.length + info.length > 26 ? ' dense' : '');
-    page.innerHTML = `<div class="inner">${h}</div><div class="foot"><span>赫眉 HYMN</span><span>${esc(g.store)} · ${items.length} 项</span></div>`;
+    page.className = 'page land';
+    page.innerHTML = `<div class="inner">${h}</div>`;
     box.appendChild(page);
   }
-  // 内容超出一页时整体缩小（留出页脚）
   const fit = () => {
-    let n = 0;
     box.querySelectorAll('.page').forEach(pg => {
-      const inner = pg.querySelector('.inner');
+      const inner = pg.querySelector('.inner'), t = inner.querySelector('table');
       inner.style.zoom = 1;
       const cs = getComputedStyle(pg);
-      const avail = pg.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 18;
-      const need = inner.getBoundingClientRect().height;
-      if (need > avail) { inner.style.zoom = (avail / need * 0.99).toFixed(3); n++; }
+      const aw = pg.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const ah = pg.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      const z = Math.min(1, aw / t.offsetWidth, ah / t.offsetHeight);
+      inner.style.zoom = z.toFixed(3);
     });
-    const el = $('#zoomNote'); if (el) el.textContent = n ? `${n} 家店项目多，已缩小` : '全部原大小放得下';
   };
   document.fonts.ready.then(() => requestAnimationFrame(fit));
-
   const nP = list.reduce((a, g) => a + g.people.length, 0);
   const net = list.reduce((a, g) => a + g.people.reduce((b, p) => b + (p.vals['实发'] || 0), 0), 0);
-    $('#kpi').innerHTML =
-    `<div class="kpi"><div class="lab">门店</div><div class="val">${list.length}<small>家</small></div><div class="sub">= ${list.length} 张 A5</div></div>` +
+  $('#kpi').innerHTML =
+    `<div class="kpi"><div class="lab">门店</div><div class="val">${list.length}<small>家</small></div><div class="sub">= ${list.length} 张 A5 横版</div></div>` +
     `<div class="kpi"><div class="lab">员工</div><div class="val">${nP}<small>人</small></div><div class="sub">每店 ${Math.min(...list.map(g => g.people.length))}–${Math.max(...list.map(g => g.people.length))} 人</div></div>` +
     `<div class="kpi p"><div class="lab">实发合计</div><div class="val">${net.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}<small>元</small></div><div class="sub">${storeLabel()}</div></div>` +
-    `<div class="kpi"><div class="lab">应出勤</div><div class="val">${DATA.days || '—'}<small>天</small></div><div class="sub" id="zoomNote"></div></div>`;
+    `<div class="kpi"><div class="lab">应出勤</div><div class="val">${DATA.days || '—'}<small>天</small></div><div class="sub">${list.length ? colsFor(list[0]).length + 5 + ' 列' : ''}</div></div>`;
   $('#info').textContent = `${list.length} 家门店 · ${nP} 人`;
 }
 
@@ -468,144 +465,62 @@ addEventListener('resize', closeMs);
 
 /* ---------- 导出 Excel ---------- */
 async function exportXlsx() {
-  // Excel 版照网页版的样子（2026-11-18 用户：PDF 好看、Excel 不好看）：
-  // 只有横向细线不画竖线、0 是浅灰、项目列按最长名字定宽、数字用衬线体、实发上下黑线浅金底
   const wb = new ExcelJS.Workbook();
-  const C = { ink: 'FF16140F', t2: 'FF4A453C', t3: 'FF9C958A', t4: 'FFB4ADA1', line: 'FFE8E4DC', acc: 'FFB39A6B', pink: 'FFB9808B' };
+  const thin = { style: 'thin', color: { argb: 'FF000000' } };
+  const box4 = { top: thin, left: thin, bottom: thin, right: thin };
   const fill = argb => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
-  const PAPER = fill('FFFAFAF8'), GOLD = fill('FFFAF7F1');
-  const hair = { style: 'thin', color: { argb: C.line } };
-  const SONG = '宋体', NUMF = 'Times New Roman';
-  const NF = '#,##0.00;-#,##0.00;0.00';
-  const textW = t => [...String(t)].reduce((w, ch) => w + (/[\x00-\xff]/.test(ch) ? 1.1 : 2.05), 0);
   const used = new Set();
-
   for (const g of visibleStores()) {
-    const { items, info } = rowsFor(g);
-    const multi = g.people.length > 1;
-    const nCols = 1 + g.people.length + (multi ? 1 : 0);
+    const cols = colsFor(g), N = 5 + cols.length;
+    const red = Math.min(5, Math.max(0, N - 10)), blue = N - red - Math.min(5, N - red - 5);
     let name = g.store.replace(/[\\/?*\[\]:]/g, '').slice(0, 31) || '门店';
     while (used.has(name)) name += '_';
     used.add(name);
-    const nRows = items.length + info.length + (DATA.days ? 6 : 5);
-    const land = pickLand(nCols - 1, nRows);
     const ws = wb.addWorksheet(name, {
-      views: [{ showGridLines: false }],
-      pageSetup: {
-        paperSize: 11, orientation: land ? 'landscape' : 'portrait',
-        fitToPage: true, fitToWidth: 1, fitToHeight: 1, horizontalCentered: true,
-        margins: { left: 0.35, right: 0.35, top: 0.4, bottom: 0.35, header: 0.1, footer: 0.1 },
-      },
+      pageSetup: { paperSize: 11, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 1,
+        horizontalCentered: true, margins: { left: 0.25, right: 0.25, top: 0.4, bottom: 0.4, header: 0.1, footer: 0.1 } },
     });
-
-    // 列宽：项目列按最长名字定（长名字不再被截），其余平分 A5 宽度（「缩放到一页」只缩不放，得自己铺满）
-    const PAGE_W = land ? 105 : 70, PAGE_H = land ? 368 : 544;
-    const k = nCols - 1;
-    const labelW = Math.min(26, Math.max(14, ...[...items, ...info, '本人签字'].map(textW)) + 1.5);
-    const colW = Math.max(10.5, (PAGE_W - labelW) / k);
-    ws.getColumn(1).width = labelW;
-    for (let c = 2; c <= nCols; c++) ws.getColumn(c).width = colW;
-
+    for (let c = 1; c <= N; c++) ws.getColumn(c).width = c === 1 ? 5 : c === 3 ? 12 : c <= 5 ? 9 : 8.5;
     const put = (r, c, v, o = {}) => {
       const cell = ws.getCell(r, c);
       cell.value = v;
-      cell.font = { name: o.num ? NUMF : SONG, size: o.size || 11, bold: !!o.bold, color: { argb: o.color || C.ink } };
-      cell.alignment = { vertical: 'middle', horizontal: o.align || (o.num ? 'right' : 'left'), indent: o.indent ?? (c === 1 ? 0 : 0), shrinkToFit: !!o.shrink };
-      cell.border = o.border || { bottom: hair };
-      if (o.fill) cell.fill = o.fill;
-      if (o.num) cell.numFmt = NF;
-      return cell;
+      cell.font = { name: '宋体', size: o.size || 10, bold: !!o.bold };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = box4;
+      if (o.fill) cell.fill = fill(o.fill);
+      if (o.nf) cell.numFmt = o.nf;
     };
-    const rowFill = (r, f) => { for (let c = 1; c <= nCols; c++) ws.getCell(r, c).fill = f; };
-
-    // 1 抬头：左「赫眉 HYMN」右「9 月工资单」，下面一条黑线
-    const m = (DATA.title || '').match(/(\d{4})年(\d{1,2})月/);
-    const thick = { bottom: { style: 'medium', color: { argb: C.ink } } };
-    put(1, 1, '赫眉 HYMN', { size: 13, bold: true, border: thick });
-    if (nCols > 2) ws.mergeCells(1, 2, 1, nCols);
-    put(1, 2, m ? `${+m[2]} 月工资单` : (DATA.title || '工资单'), { size: 15, align: 'right', border: thick });
-    for (let c = 3; c <= nCols; c++) ws.getCell(1, c).border = thick;
-
-    // 2 门店信息：一行，不画线；单人店表窄就分两行
+    // 第 1 行：蓝底标题 + 红块（应出勤天数）
+    ws.mergeCells(1, 1, 1, blue);
+    put(1, 1, DATA.title || '工资单', { size: 14, bold: true, fill: 'FF00B0F0' });
+    if (red) { ws.mergeCells(1, blue + 1, 1, blue + red); put(1, blue + 1, DATA.days || '', { fill: 'FFFF0000' }); }
+    for (let c = blue + red + 1; c <= N; c++) ws.getCell(1, c).border = {};
+    ws.getRow(1).height = 26;
+    // 第 2 行：表头
+    ['', '', '门店', '区域经理', '职位'].forEach((t, i) => put(2, i + 1, t, { bold: true }));
+    let peach = false;
+    cols.forEach((c, i) => { if (c === PEACH_FROM) peach = true; if (i === cols.length - 1) peach = false; put(2, 6 + i, c, { bold: true, fill: peach ? 'FFFCE4D6' : undefined }); });
+    ws.getRow(2).height = 46;
+    const NF = '0.00_);[Red]\\(0.00\\)';
     let r = 2;
-    const meta = [`门店  ${g.store}`, `区域经理  ${g.region}`, DATA.days ? `应出勤  ${DATA.days} 天` : ''].filter(Boolean);
-    const metaRows = textW(meta.join('　　')) > PAGE_W * 0.95 ? [meta[0], meta.slice(1).join('　　')] : [meta.join('　　')];
-    for (const t of metaRows) {
-      if (nCols > 1) ws.mergeCells(r, 1, r, nCols);
-      put(r, 1, t, { size: 10, color: C.t2, border: {} });
+    g.people.forEach((p, k) => {
       r++;
-    }
-
-    // 表头
-    const gold = { bottom: { style: 'thin', color: { argb: C.acc } } };
-    put(r, 1, '项目', { size: 9.5, color: C.t3, fill: PAPER, border: gold });
-    g.people.forEach((p, i) => put(r, 2 + i, p.name, { bold: true, align: 'right', fill: PAPER, border: gold, shrink: true }));
-    if (multi) put(r, nCols, '合计', { bold: true, align: 'right', fill: PAPER, border: gold });
-    const headRow = r;
-    r++;
-    put(r, 1, '职位', { size: 9.5, color: C.t3 });
-    g.people.forEach((p, i) => put(r, 2 + i, p.role || '—', { size: 9.5, color: C.t3, align: 'right' }));
-    if (multi) put(r, nCols, '', { fill: PAPER });
-
-    // 项目
-    let netRow = 0, cardRow = 0;
-    for (const it of items) {
-      r++;
-      const net = it === '实发';
-      const vs = g.people.map(p => p.vals[it]);
-      const colr = v => v === 0 ? C.t4 : v < 0 ? C.pink : C.ink;
-      if (net) {
-        netRow = r;
-        const bd = { top: { style: 'thin', color: { argb: C.ink } }, bottom: { style: 'thin', color: { argb: C.ink } } };
-        put(r, 1, '实　发', { size: 12, bold: true, border: bd, fill: GOLD });
-        vs.forEach((v, i) => put(r, 2 + i, v, { num: true, size: 13, bold: true, border: bd, fill: GOLD }));
-        if (multi) put(r, nCols, vs.reduce((a, b) => a + b, 0), { num: true, size: 13, bold: true, border: bd, fill: GOLD });
-        continue;
-      }
-      put(r, 1, it, { size: 10.5, color: C.t2, shrink: true });
-      vs.forEach((v, i) => put(r, 2 + i, v, { num: true, color: colr(v) }));
-      if (multi) {
-        if (NO_SUM.includes(it)) put(r, nCols, '', { fill: PAPER });
-        else {
-          const sum = vs.reduce((a, b) => a + b, 0);
-          const a1 = ws.getCell(r, 2).address, b1 = ws.getCell(r, 1 + g.people.length).address;
-          put(r, nCols, { formula: `SUM(${a1}:${b1})`, result: sum }, { num: true, color: colr(sum), fill: PAPER });
-        }
-      }
-    }
-
-    // 员工信息：小一号灰字；卡号放不下就自动缩小字号（不换行）
-    if (info.length) { r++; ws.getRow(r).height = 6; }
-    for (const it of info) {
-      r++;
-      put(r, 1, it, { size: 9.5, color: C.t3 });
-      g.people.forEach((p, i) => {
-        let v = p.info[it] || '';
-        if (it === '司龄' && /^\d{1,3}$/.test(v)) v = +v;
-        const split = it === '银行卡' && colW < 17 && v.length > 12;   // 窄列放不下 19 位卡号：前 10 位一行、后面一行
-        if (split) v = v.slice(0, 10) + '\n' + v.slice(10);
-        const c0 = put(r, 2 + i, v, { size: 9.5, color: C.t3, align: 'right' });
-        if (split) { c0.alignment = { ...c0.alignment, wrapText: true }; cardRow = r; }
+      put(r, 1, k + 1, { bold: true }); put(r, 2, p.name); put(r, 3, p.store); put(r, 4, p.region); put(r, 5, p.role);
+      cols.forEach((c, i) => {
+        const v = p.vals[c] || 0;
+        put(r, 6 + i, v === 0 ? null : v, { nf: c === '考勤' ? 'General' : NF, fill: i === 0 ? 'FF92D050' : undefined });
       });
-      if (multi) put(r, nCols, '');
-    }
+      ws.getRow(r).height = 28;
+    });
     r++;
-    put(r, 1, '本人签字', { size: 10.5, border: { bottom: { style: 'thin', color: { argb: C.t4 } } } });
-    for (let c = 2; c <= nCols; c++) put(r, c, '', { border: { bottom: { style: 'thin', color: { argb: C.t4 } } } });
-    const signRow = r;
-
-    // 行高：标题、签字固定；其余平分，最多 26 磅（行少的店下面留白，跟网页版一样），太多时靠缩放
-    const TITLE_H = 34, SIGN_H = 40;
-    const body = [];
-    for (let i = 2; i < signRow; i++) if (ws.getRow(i).height !== 6) body.push(i);
-    const h = Math.max(15, Math.min(26, (PAGE_H - TITLE_H - SIGN_H) / body.length));
-    ws.getRow(1).height = TITLE_H;
-    body.forEach(i => ws.getRow(i).height = h);
-    ws.getRow(headRow).height = Math.max(h, 20);
-    if (netRow) ws.getRow(netRow).height = Math.max(h + 6, 24);
-    if (cardRow) ws.getRow(cardRow).height = Math.max(h, 28);
-    ws.getRow(signRow).height = SIGN_H;
-    ws.pageSetup.printArea = `A1:${ws.getCell(signRow, nCols).address}`;
+    put(r, 1, ''); put(r, 2, '小计'); put(r, 3, '合计', { bold: true, size: 11 }); put(r, 4, ''); put(r, 5, '');
+    cols.forEach((c, i) => {
+      const col = ws.getColumn(6 + i).letter;
+      const sm = g.people.reduce((a, p) => a + (p.vals[c] || 0), 0);
+      put(r, 6 + i, { formula: `SUM(${col}3:${col}${r - 1})`, result: sm }, { nf: NF });
+    });
+    ws.getRow(r).height = 28;
+    ws.pageSetup.printArea = `A1:${ws.getCell(r, N).address}`;
   }
 
   const buf = await wb.xlsx.writeBuffer();
