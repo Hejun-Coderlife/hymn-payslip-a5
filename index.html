@@ -241,6 +241,18 @@ const NO_SUM = ['考勤'];
 // 实发之后这些列作为员工信息显示在底部
 const INFO = ['入职时间', '离职', '司龄', '银行卡'];
 
+// 区域经理分组（2026-11-18 用户定：官卜妮 20 / 杜海霞 9 / 张维 14）。按店名关键字归属，表里「区域经理」列填错也以这里为准
+const REGION_MAP = {
+  '官卜妮': ['崇寿', '范市', '古林', '龙湖', '恒一', '横街', '横溪', '嘉悦', '姜山', '联丰', '龙山', '邱隘', '三横', '塘下', '天元', '西坞', '溪口', '鄞州万达', '周巷'],
+  '杜海霞': ['柴桥', '慈城', '高塘', '红联', '洪塘', '华悦', '炼化', '江北万达', '美时', '小港', '庄市'],
+  '张维': ['低塘', '横峰', '金清', '马渚', '梅林', '潘郎', '蓬街', '钱清', '石浦', '泗门', '新河', '义桥', '丈亭'],
+};
+function regionOf(store, fallback) {
+  for (const [m, keys] of Object.entries(REGION_MAP)) if (keys.some(k => store.includes(k))) return m;
+  return fallback;   // 新店不在名单里：沿用表里填的
+}
+function fixRegions(d) { d.people.forEach(p => { p.region = regionOf(p.store, p.region); }); }
+
 let DATA = null;
 let REGION = '';
 let SEL = new Set();   // 勾选的门店；空 = 全部
@@ -407,7 +419,8 @@ function render() {
 }
 
 function fillFilters() {
-  const regions = [...new Set(DATA.people.map(p => p.region).filter(Boolean))];
+  const regions = [...new Set(DATA.people.map(p => p.region).filter(Boolean))]
+    .sort((a, b) => (Object.keys(REGION_MAP).indexOf(a) + 1 || 99) - (Object.keys(REGION_MAP).indexOf(b) + 1 || 99));
   if (!regions.includes(REGION)) REGION = '';
   $('#fRegion').innerHTML = ['', ...regions].map(r => `<a data-r="${esc(r)}"${r === REGION ? ' class="on"' : ''}>${r ? esc(r) : '全部'}</a>`).join('');
   fillStores();
@@ -616,6 +629,7 @@ async function load(file) {
   }
 }
 function ready() {
+  fixRegions(DATA);
   $('#drop').hidden = true;
   $('#view').hidden = false;
   $('#eyebrow').textContent = '赫眉 HYMN · ' + (DATA.title || '工资');
