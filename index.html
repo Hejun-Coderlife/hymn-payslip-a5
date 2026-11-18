@@ -589,7 +589,7 @@ async function downloadTemplate() {
   Object.assign(ws.getCell(1, 6), { font: { ...font, size: 12, bold: true }, alignment: { horizontal: 'center', vertical: 'middle' },
     border: { top: box, left: box, bottom: box, right: box } });
   ws.mergeCells(1, 7, 1, 10);
-  Object.assign(ws.getCell(1, 7), { value: '← 在方框里填天数（只填数字，如 26）', font: { ...font, color: { argb: 'FF999999' } }, alignment: { vertical: 'middle' } });
+  Object.assign(ws.getCell(1, 7), { value: '← 在 F1 方框里填天数（只填数字，如 26）', font: { ...font, color: { argb: 'FF999999' } }, alignment: { vertical: 'middle' } });
   ws.getRow(1).height = 26;
   // 第 2 行：表头（浅灰底、加粗、按字数均分换行）
   hdr.forEach((h, i) => {
