@@ -134,6 +134,15 @@ button,input,select{font:inherit;color:inherit}
 .xsel-pop a{display:block;position:relative;padding:9px 18px 9px 30px;font-size:13px;line-height:1.4;white-space:nowrap;cursor:pointer;color:var(--t2)}
 .xsel-pop a:hover{background:var(--paper);color:var(--ink)}
 .xsel-pop a.on{color:var(--ink)}
+.ms .ms-ops{display:flex;gap:14px;align-items:center;padding:4px 18px 8px;border-bottom:1px solid var(--line);margin-bottom:4px;font-size:12px}
+.ms .ms-ops a{padding:0;color:var(--acc-dk);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.ms .ms-ops a::before{display:none}
+.ms .ms-n{margin-left:auto;color:var(--t3)}
+.ms a.ms-it{padding-left:18px;display:flex;align-items:center;gap:10px;user-select:none}
+.ms a.ms-it.on::before{display:none}
+.ms .ck{width:14px;height:14px;border:1px solid var(--chip);background:#fff;flex:none;position:relative}
+.ms a.ms-it.on .ck{background:var(--acc);border-color:var(--acc)}
+.ms a.ms-it.on .ck::after{content:'';position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
 .xsel-pop a.on::before{content:'';position:absolute;left:14px;top:50%;width:6px;height:6px;margin-top:-3px;background:var(--acc)}
 @media print{.xsel-pop{display:none}}
 
@@ -178,7 +187,7 @@ button,input,select{font:inherit;color:inherit}
   <div id="view" hidden>
     <div class="filters">
       <span class="fseg" id="fRegion"></span>
-      <select class="inp" id="fStore"><option value="">全部门店</option></select>
+      <span class="xsel" id="msWrap"><button type="button" class="inp xsel-btn" id="fStore">全部门店</button></span>
       <label class="tgl"><input type="checkbox" id="showAll"> 显示全为 0 的项目</label>
       <span class="cnt" id="info"></span>
     </div>
@@ -199,6 +208,7 @@ const INFO = ['入职时间', '离职', '司龄', '银行卡'];
 
 let DATA = null;
 let REGION = '';
+let SEL = new Set();   // 勾选的门店；空 = 全部
 let FILE = '';   // {title, days, items:[label], info:[label], people:[{name,store,region,role,vals:{},info:{}}]}
 const $ = s => document.querySelector(s);
 
@@ -280,8 +290,8 @@ function stores() {
   return [...map.values()];
 }
 function visibleStores() {
-  const r = REGION, s = $('#fStore').value;
-  return stores().filter(g => (!r || g.region === r) && (!s || g.store === s));
+  const r = REGION;
+  return stores().filter(g => (!r || g.region === r) && (!SEL.size || SEL.has(g.store)));
 }
 function rowsFor(g) {
   const showAll = $('#showAll').checked;
@@ -350,7 +360,7 @@ function render() {
     $('#kpi').innerHTML =
     `<div class="kpi"><div class="lab">门店</div><div class="val">${list.length}<small>家</small></div><div class="sub">= ${list.length} 张 A5</div></div>` +
     `<div class="kpi"><div class="lab">员工</div><div class="val">${nP}<small>人</small></div><div class="sub">每店 ${Math.min(...list.map(g => g.people.length))}–${Math.max(...list.map(g => g.people.length))} 人</div></div>` +
-    `<div class="kpi p"><div class="lab">实发合计</div><div class="val">${net.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}<small>元</small></div><div class="sub">${REGION || $('#fStore').value || '全部门店'}</div></div>` +
+    `<div class="kpi p"><div class="lab">实发合计</div><div class="val">${net.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}<small>元</small></div><div class="sub">${storeLabel()}</div></div>` +
     `<div class="kpi"><div class="lab">应出勤</div><div class="val">${DATA.days || '—'}<small>天</small></div><div class="sub" id="zoomNote"></div></div>`;
   $('#info').textContent = `${list.length} 家门店 · ${nP} 人`;
 }
@@ -359,14 +369,79 @@ function fillFilters() {
   const regions = [...new Set(DATA.people.map(p => p.region).filter(Boolean))];
   if (!regions.includes(REGION)) REGION = '';
   $('#fRegion').innerHTML = ['', ...regions].map(r => `<a data-r="${esc(r)}"${r === REGION ? ' class="on"' : ''}>${r ? esc(r) : '全部'}</a>`).join('');
-  fillStores($('#fStore').value);
+  fillStores();
 }
-function fillStores(keep) {
-  const r = REGION;
-  const list = stores().filter(g => !r || g.region === r).map(g => g.store);
-  $('#fStore').innerHTML = '<option value="">全部门店</option>' + list.map(s => `<option>${esc(s)}</option>`).join('');
-  if (list.includes(keep)) $('#fStore').value = keep;
+const regionStores = () => stores().filter(g => !REGION || g.region === REGION).map(g => g.store);
+function storeLabel() {
+  if (!SEL.size) return REGION ? REGION + ' 全部门店' : '全部门店';
+  if (SEL.size === 1) return [...SEL][0];
+  return `已选 ${SEL.size} 家门店`;
 }
+function fillStores() {
+  const list = regionStores();
+  SEL = new Set([...SEL].filter(s => list.includes(s)));
+  const b = $('#fStore');
+  b.textContent = storeLabel();
+  b.style.minWidth = `calc(${Math.max(8, ...list.map(s => s.length))}em + 44px)`;
+}
+
+/* 门店多选：勾选框 + 搜索 + 全选/清空，点着不关，边勾边出预览（2026-11-18 用户：只想打印某几家） */
+let MS = null;
+const closeMs = () => { if (MS) { MS.remove(); MS = null; $('#msWrap').classList.remove('open'); } };
+function openMs() {
+  if (MS) { closeMs(); return; }
+  const list = regionStores();
+  const btn = $('#fStore'), r = btn.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'xsel-pop ms';
+  el.innerHTML = `<input class="xsel-q" type="search" placeholder="搜索门店" autocomplete="off">
+    <div class="ms-ops"><a data-op="all">全选</a><a data-op="vis">勾选搜到的</a><a data-op="none">清空</a><span class="ms-n"></span></div>
+    ${list.map(s => `<a class="ms-it" data-s="${esc(s)}"><i class="ck"></i>${esc(s)}</a>`).join('')}
+    <div class="xsel-empty" style="display:none">没有匹配的</div>`;
+  document.body.appendChild(el);
+  el.style.minWidth = Math.max(r.width, 230) + 'px';
+  el.style.left = Math.min(r.left, innerWidth - el.offsetWidth - 8) + 'px';
+  el.style.top = r.bottom + 4 + 'px';
+  el.style.maxHeight = Math.max(240, innerHeight - r.bottom - 16) + 'px';
+  MS = el; $('#msWrap').classList.add('open');
+  const q = el.querySelector('.xsel-q');
+  const paint = () => {
+    el.querySelectorAll('.ms-it').forEach(a => a.classList.toggle('on', SEL.has(a.dataset.s)));
+    el.querySelector('.ms-n').textContent = SEL.size ? `已选 ${SEL.size}` : '未选 = 全部';
+  };
+  const apply = () => { paint(); fillStores(); render(); saveUI(); };
+  let composing = false;
+  const filt = () => {
+    const w = q.value.trim().toLowerCase(); let n = 0;
+    el.querySelectorAll('.ms-it').forEach(a => { const ok = !w || a.dataset.s.toLowerCase().includes(w); a.style.display = ok ? '' : 'none'; if (ok) n++; });
+    el.querySelector('.xsel-empty').style.display = n ? 'none' : '';
+  };
+  q.addEventListener('compositionstart', () => { composing = true; });
+  q.addEventListener('compositionend', () => { composing = false; filt(); });
+  q.addEventListener('input', () => { if (!composing) filt(); });
+  q.addEventListener('keydown', ev => {   // 回车 = 勾上第一个搜到的，并清空搜索接着搜下一家
+    if (ev.key !== 'Enter' || composing) return;
+    const first = [...el.querySelectorAll('.ms-it')].find(a => a.style.display !== 'none');
+    if (first) { SEL.add(first.dataset.s); q.value = ''; filt(); apply(); }
+  });
+  el.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const it = ev.target.closest('.ms-it'), op = ev.target.closest('[data-op]');
+    if (it) { const s = it.dataset.s; SEL.has(s) ? SEL.delete(s) : SEL.add(s); apply(); }
+    else if (op) {
+      if (op.dataset.op === 'none') SEL.clear();
+      else if (op.dataset.op === 'all') list.forEach(s => SEL.add(s));
+      else el.querySelectorAll('.ms-it').forEach(a => { if (a.style.display !== 'none') SEL.add(a.dataset.s); });
+      apply();
+    }
+  });
+  paint();
+  q.focus({ preventScroll: true });
+}
+$('#fStore').addEventListener('click', e => { e.stopPropagation(); openMs(); });
+document.addEventListener('click', closeMs);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMs(); });
+addEventListener('resize', closeMs);
 
 /* ---------- 导出 Excel ---------- */
 async function exportXlsx() {
@@ -395,7 +470,8 @@ async function exportXlsx() {
       },
     });
     ws.getColumn(1).width = 22;
-    for (let c = 2; c <= nCols; c++) ws.getColumn(c).width = 13;
+    // 人名列要放得下 19 位银行卡号，不换行（2026-11-18 用户：卡号换行后被挡住）
+    for (let c = 2; c <= nCols; c++) ws.getColumn(c).width = 21;
 
     // 标题
     ws.mergeCells(1, 1, 1, nCols);
@@ -405,10 +481,6 @@ async function exportXlsx() {
     t.alignment = { horizontal: 'center', vertical: 'middle' };
     t.border = { bottom: { style: 'medium', color: { argb: 'FF16140F' } } };
     ws.getRow(1).height = 26;
-    ws.mergeCells(2, 1, 2, nCols);
-    ws.getCell(2, 1).value = `门店：${g.store}    区域经理：${g.region}` + (DATA.days ? `    应出勤：${DATA.days} 天` : '');
-    ws.getCell(2, 1).font = font();
-    ws.getRow(2).height = 18;
 
     const put = (r, c, v, o = {}) => {
       const cell = ws.getCell(r, c);
@@ -420,7 +492,18 @@ async function exportXlsx() {
       if (o.numFmt) cell.numFmt = o.numFmt;
       return cell;
     };
-    let r = 3;
+    // 门店信息一项一行：左边标签、右边合并到最后一列（原来挤在一行，单人店表窄会被挡住）
+    let r = 1;
+    const metas = [['门店', g.store], ['区域经理', g.region]];
+    if (DATA.days) metas.push(['应出勤', `${DATA.days} 天`]);
+    for (const [k, v] of metas) {
+      r++;
+      put(r, 1, k, { align: 'left', font: { color: { argb: 'FF9C958A' } } });
+      if (nCols > 2) ws.mergeCells(r, 2, r, nCols);
+      put(r, 2, v, { align: 'left', font: { bold: true } });
+      for (let c = 3; c <= nCols; c++) ws.getCell(r, c).border = border;
+    }
+    r++;
     put(r, 1, '项目', { font: { bold: true }, fill: peach });
     g.people.forEach((p, i) => put(r, 2 + i, p.name, { font: { bold: true }, fill: peach }));
     if (multi) put(r, nCols, '合计', { font: { bold: true }, fill: peach });
@@ -445,14 +528,18 @@ async function exportXlsx() {
     for (const it of info) {
       r++;
       put(r, 1, it, { align: 'left', font: { size: 9, color: { argb: 'FF9C958A' } } });
-      g.people.forEach((p, i) => put(r, 2 + i, p.info[it] || '', { font: { size: 8 }, wrap: true }));
+      g.people.forEach((p, i) => {
+        let v = p.info[it] || '';
+        if (it === '司龄' && /^\d{1,3}$/.test(v)) v = +v;   // 司龄存成数字，WPS 不再出绿三角
+        put(r, 2 + i, v, { font: { size: 9 } });
+      });
       if (multi) put(r, nCols, '');
     }
     r++;
     put(r, 1, '本人签字', { align: 'left' });
     for (let c = 2; c <= nCols; c++) put(r, c, '', c === nCols && multi ? { fill: gray } : {});
     ws.getRow(r).height = 32;
-    for (let i = 3; i < r; i++) ws.getRow(i).height = 16;
+    for (let i = 2; i < r; i++) ws.getRow(i).height = 18;
     ws.pageSetup.printArea = `A1:${ws.getCell(r, nCols).address}`;
   }
 
@@ -460,7 +547,7 @@ async function exportXlsx() {
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  const s = $('#fStore').value || REGION || '全部门店';
+  const s = SEL.size ? (SEL.size === 1 ? [...SEL][0] : `${SEL.size}家门店`) : (REGION || '全部门店');
   a.download = `${(DATA.title || '工资单').replace(/[\\/:*?"<>|]/g, '')}_${s}_A5.xlsx`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -488,7 +575,7 @@ function ready() {
   render();
 }
 function saveUI() {
-  localStorage.setItem(LS_KEY + '-ui', JSON.stringify({ r: REGION, s: $('#fStore').value, all: $('#showAll').checked }));
+  localStorage.setItem(LS_KEY + '-ui', JSON.stringify({ r: REGION, sel: [...SEL], all: $('#showAll').checked }));
 }
 
 $('#pick').onclick = () => $('#file').click();
@@ -504,9 +591,8 @@ $('#fRegion').onclick = e => {
   const a = e.target.closest('a'); if (!a) return;
   REGION = a.dataset.r;
   $('#fRegion').querySelectorAll('a').forEach(x => x.classList.toggle('on', x === a));
-  fillStores(''); render(); saveUI();
+  SEL.clear(); fillStores(); render(); saveUI();
 };
-$('#fStore').onchange = () => { render(); saveUI(); };
 $('#showAll').onchange = () => { render(); saveUI(); };
 $('#btnXlsx').onclick = exportXlsx;
 $('#btnPrint').onclick = () => window.print();
@@ -518,9 +604,8 @@ try {
   if (saved && saved.people) {
     DATA = saved;
     $('#showAll').checked = !!ui.all;
-    fillFilters();
-    if (ui.r) { REGION = ui.r; fillFilters(); fillStores(ui.s); }
-    else if (ui.s) $('#fStore').value = ui.s;
+    REGION = ui.r || '';
+    SEL = new Set(ui.sel || []);
     ready();
   }
 } catch (e) {}
