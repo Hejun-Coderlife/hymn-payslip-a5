@@ -464,7 +464,7 @@ async function exportXlsx() {
   const peach = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F0EB' } };
   const yellow = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5EEDF' } };
   const gray = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAF8' } };
-  const font = (o = {}) => ({ name: '宋体', size: 10, ...o });
+  const font = (o = {}) => ({ name: '宋体', size: 11, ...o });
   const used = new Set();
 
   for (const g of visibleStores()) {
@@ -482,18 +482,21 @@ async function exportXlsx() {
         margins: { left: 0.3, right: 0.3, top: 0.35, bottom: 0.35, header: 0.1, footer: 0.1 },
       },
     });
-    ws.getColumn(1).width = 22;
-    // 人名列要放得下 19 位银行卡号，不换行（2026-11-18 用户：卡号换行后被挡住）
-    for (let c = 2; c <= nCols; c++) ws.getColumn(c).width = 21;
+    // 按 A5 可打印区域定列宽，让表格铺满纸宽（「缩放到一页」只会缩小不会放大，2026-11-18 用户：打出来只占一小块）
+    // A5 竖版去掉页边距约 133 × 192 mm ≈ 70 个字符宽 × 544 磅高；横版约 105 字符 × 368 磅
+    const PAGE_W = land ? 105 : 70, PAGE_H = land ? 368 : 544;
+    const k = nCols - 1, labelW = 18, colW = Math.max(10, (PAGE_W - labelW - k * 0.7) / k);
+    ws.getColumn(1).width = labelW;
+    for (let c = 2; c <= nCols; c++) ws.getColumn(c).width = colW;
+    const cardFits = colW >= 17;   // 19 位卡号 9 号字一行放得下
 
     // 标题
     ws.mergeCells(1, 1, 1, nCols);
     const t = ws.getCell(1, 1);
     t.value = DATA.title || '工资单';
-    t.font = font({ size: 14, bold: true });
+    t.font = font({ size: 16, bold: true });
     t.alignment = { horizontal: 'center', vertical: 'middle' };
     t.border = { bottom: { style: 'medium', color: { argb: 'FF16140F' } } };
-    ws.getRow(1).height = 26;
 
     const put = (r, c, v, o = {}) => {
       const cell = ws.getCell(r, c);
@@ -506,7 +509,7 @@ async function exportXlsx() {
       return cell;
     };
     // 门店信息一项一行：左边标签、右边合并到最后一列（原来挤在一行，单人店表窄会被挡住）
-    let r = 1;
+    let r = 1, cardRow = 0;
     const metas = [['门店', g.store], ['区域经理', g.region]];
     if (DATA.days) metas.push(['应出勤', `${DATA.days} 天`]);
     for (const [k, v] of metas) {
@@ -528,7 +531,7 @@ async function exportXlsx() {
     for (const it of items) {
       r++;
       const net = it === '实发';
-      const f = net ? { bold: true, size: 11 } : {};
+      const f = net ? { bold: true, size: 13 } : {};
       put(r, 1, it, { fill: net ? yellow : undefined, align: 'left', font: f });
       g.people.forEach((p, i) => put(r, 2 + i, p.vals[it], { numFmt: NF, align: 'right', font: f, fill: net ? yellow : undefined }));
       if (multi && NO_SUM.includes(it)) put(r, nCols, '', { fill: gray });
@@ -544,15 +547,22 @@ async function exportXlsx() {
       g.people.forEach((p, i) => {
         let v = p.info[it] || '';
         if (it === '司龄' && /^\d{1,3}$/.test(v)) v = +v;   // 司龄存成数字，WPS 不再出绿三角
-        put(r, 2 + i, v, { font: { size: 9 } });
+        const card = it === '银行卡';
+        put(r, 2 + i, v, { font: { size: card && !cardFits ? 8 : 9.5 }, wrap: card && !cardFits });
       });
+      if (it === '银行卡' && !cardFits) cardRow = r;
       if (multi) put(r, nCols, '');
     }
     r++;
     put(r, 1, '本人签字', { align: 'left' });
     for (let c = 2; c <= nCols; c++) put(r, c, '', c === nCols && multi ? { fill: gray } : {});
-    ws.getRow(r).height = 32;
-    for (let i = 2; i < r; i++) ws.getRow(i).height = 18;
+    // 行高：标题、签字固定，其余平分剩下的高度（15~40 磅）；行太多时靠 fitToHeight 缩
+    const TITLE_H = 36, SIGN_H = 46, n = r - 2;
+    const h = Math.max(15, Math.min(40, (PAGE_H - TITLE_H - SIGN_H) / n));
+    ws.getRow(1).height = TITLE_H;
+    for (let i = 2; i < r; i++) ws.getRow(i).height = h;
+    if (cardRow) ws.getRow(cardRow).height = Math.max(h, 30);
+    ws.getRow(r).height = SIGN_H;
     ws.pageSetup.printArea = `A1:${ws.getCell(r, nCols).address}`;
   }
 
