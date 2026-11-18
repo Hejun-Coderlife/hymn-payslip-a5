@@ -468,13 +468,16 @@ addEventListener('resize', closeMs);
 
 /* ---------- 导出 Excel ---------- */
 async function exportXlsx() {
+  // Excel 版照网页版的样子（2026-11-18 用户：PDF 好看、Excel 不好看）：
+  // 只有横向细线不画竖线、0 是浅灰、项目列按最长名字定宽、数字用衬线体、实发上下黑线浅金底
   const wb = new ExcelJS.Workbook();
-  const thin = { style: 'thin', color: { argb: 'FFD9D4CA' } };
-  const border = { top: thin, left: thin, bottom: thin, right: thin };
-  const peach = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F0EB' } };
-  const yellow = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5EEDF' } };
-  const gray = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAF8' } };
-  const font = (o = {}) => ({ name: '宋体', size: 11, ...o });
+  const C = { ink: 'FF16140F', t2: 'FF4A453C', t3: 'FF9C958A', t4: 'FFB4ADA1', line: 'FFE8E4DC', acc: 'FFB39A6B', pink: 'FFB9808B' };
+  const fill = argb => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+  const PAPER = fill('FFFAFAF8'), GOLD = fill('FFFAF7F1');
+  const hair = { style: 'thin', color: { argb: C.line } };
+  const SONG = '宋体', NUMF = 'Times New Roman';
+  const NF = '#,##0.00;-#,##0.00;0.00';
+  const textW = t => [...String(t)].reduce((w, ch) => w + (/[\x00-\xff]/.test(ch) ? 1.1 : 2.05), 0);
   const used = new Set();
 
   for (const g of visibleStores()) {
@@ -484,96 +487,125 @@ async function exportXlsx() {
     let name = g.store.replace(/[\\/?*\[\]:]/g, '').slice(0, 31) || '门店';
     while (used.has(name)) name += '_';
     used.add(name);
-    const land = pickLand(nCols - 1, items.length + info.length + (DATA.days ? 6 : 5));
+    const nRows = items.length + info.length + (DATA.days ? 6 : 5);
+    const land = pickLand(nCols - 1, nRows);
     const ws = wb.addWorksheet(name, {
+      views: [{ showGridLines: false }],
       pageSetup: {
         paperSize: 11, orientation: land ? 'landscape' : 'portrait',
         fitToPage: true, fitToWidth: 1, fitToHeight: 1, horizontalCentered: true,
-        margins: { left: 0.3, right: 0.3, top: 0.35, bottom: 0.35, header: 0.1, footer: 0.1 },
+        margins: { left: 0.35, right: 0.35, top: 0.4, bottom: 0.35, header: 0.1, footer: 0.1 },
       },
     });
-    // 按 A5 可打印区域定列宽，让表格铺满纸宽（「缩放到一页」只会缩小不会放大，2026-11-18 用户：打出来只占一小块）
-    // A5 竖版去掉页边距约 133 × 192 mm ≈ 70 个字符宽 × 544 磅高；横版约 105 字符 × 368 磅
+
+    // 列宽：项目列按最长名字定（长名字不再被截），其余平分 A5 宽度（「缩放到一页」只缩不放，得自己铺满）
     const PAGE_W = land ? 105 : 70, PAGE_H = land ? 368 : 544;
-    const k = nCols - 1, labelW = 18, colW = Math.max(10, (PAGE_W - labelW - k * 0.7) / k);
+    const k = nCols - 1;
+    const labelW = Math.min(26, Math.max(14, ...[...items, ...info, '本人签字'].map(textW)) + 1.5);
+    const colW = Math.max(10.5, (PAGE_W - labelW) / k);
     ws.getColumn(1).width = labelW;
     for (let c = 2; c <= nCols; c++) ws.getColumn(c).width = colW;
-    const cardFits = colW >= 17;   // 19 位卡号 9 号字一行放得下
-
-    // 标题
-    ws.mergeCells(1, 1, 1, nCols);
-    const t = ws.getCell(1, 1);
-    t.value = DATA.title || '工资单';
-    t.font = font({ size: 16, bold: true });
-    t.alignment = { horizontal: 'center', vertical: 'middle' };
-    t.border = { bottom: { style: 'medium', color: { argb: 'FF16140F' } } };
 
     const put = (r, c, v, o = {}) => {
       const cell = ws.getCell(r, c);
       cell.value = v;
-      cell.border = border;
-      cell.font = font(o.font || {});
-      cell.alignment = { vertical: 'middle', horizontal: o.align || 'center', wrapText: !!o.wrap };
+      cell.font = { name: o.num ? NUMF : SONG, size: o.size || 11, bold: !!o.bold, color: { argb: o.color || C.ink } };
+      cell.alignment = { vertical: 'middle', horizontal: o.align || (o.num ? 'right' : 'left'), indent: o.indent ?? (c === 1 ? 0 : 0), shrinkToFit: !!o.shrink };
+      cell.border = o.border || { bottom: hair };
       if (o.fill) cell.fill = o.fill;
-      if (o.numFmt) cell.numFmt = o.numFmt;
+      if (o.num) cell.numFmt = NF;
       return cell;
     };
-    // 门店信息一项一行：左边标签、右边合并到最后一列（原来挤在一行，单人店表窄会被挡住）
-    let r = 1, cardRow = 0;
-    const metas = [['门店', g.store], ['区域经理', g.region]];
-    if (DATA.days) metas.push(['应出勤', `${DATA.days} 天`]);
-    for (const [k, v] of metas) {
+    const rowFill = (r, f) => { for (let c = 1; c <= nCols; c++) ws.getCell(r, c).fill = f; };
+
+    // 1 抬头：左「赫眉 HYMN」右「9 月工资单」，下面一条黑线
+    const m = (DATA.title || '').match(/(\d{4})年(\d{1,2})月/);
+    const thick = { bottom: { style: 'medium', color: { argb: C.ink } } };
+    put(1, 1, '赫眉 HYMN', { size: 13, bold: true, border: thick });
+    if (nCols > 2) ws.mergeCells(1, 2, 1, nCols);
+    put(1, 2, m ? `${+m[2]} 月工资单` : (DATA.title || '工资单'), { size: 15, align: 'right', border: thick });
+    for (let c = 3; c <= nCols; c++) ws.getCell(1, c).border = thick;
+
+    // 2 门店信息：一行，不画线；单人店表窄就分两行
+    let r = 2;
+    const meta = [`门店  ${g.store}`, `区域经理  ${g.region}`, DATA.days ? `应出勤  ${DATA.days} 天` : ''].filter(Boolean);
+    const metaRows = textW(meta.join('　　')) > PAGE_W * 0.95 ? [meta[0], meta.slice(1).join('　　')] : [meta.join('　　')];
+    for (const t of metaRows) {
+      if (nCols > 1) ws.mergeCells(r, 1, r, nCols);
+      put(r, 1, t, { size: 10, color: C.t2, border: {} });
       r++;
-      put(r, 1, k, { align: 'left', font: { color: { argb: 'FF9C958A' } } });
-      if (nCols > 2) ws.mergeCells(r, 2, r, nCols);
-      put(r, 2, v, { align: 'left', font: { bold: true } });
-      for (let c = 3; c <= nCols; c++) ws.getCell(r, c).border = border;
     }
+
+    // 表头
+    const gold = { bottom: { style: 'thin', color: { argb: C.acc } } };
+    put(r, 1, '项目', { size: 9.5, color: C.t3, fill: PAPER, border: gold });
+    g.people.forEach((p, i) => put(r, 2 + i, p.name, { bold: true, align: 'right', fill: PAPER, border: gold, shrink: true }));
+    if (multi) put(r, nCols, '合计', { bold: true, align: 'right', fill: PAPER, border: gold });
+    const headRow = r;
     r++;
-    put(r, 1, '项目', { font: { bold: true }, fill: peach });
-    g.people.forEach((p, i) => put(r, 2 + i, p.name, { font: { bold: true }, fill: peach }));
-    if (multi) put(r, nCols, '合计', { font: { bold: true }, fill: peach });
-    r++;
-    put(r, 1, '职位', { align: 'left', font: { color: { argb: 'FF9C958A' } } });
-    g.people.forEach((p, i) => put(r, 2 + i, p.role, {}));
-    if (multi) put(r, nCols, '');
-    const NF = '#,##0.00;[Red]-#,##0.00';
+    put(r, 1, '职位', { size: 9.5, color: C.t3 });
+    g.people.forEach((p, i) => put(r, 2 + i, p.role || '—', { size: 9.5, color: C.t3, align: 'right' }));
+    if (multi) put(r, nCols, '', { fill: PAPER });
+
+    // 项目
+    let netRow = 0, cardRow = 0;
     for (const it of items) {
       r++;
       const net = it === '实发';
-      const f = net ? { bold: true, size: 13 } : {};
-      put(r, 1, it, { fill: net ? yellow : undefined, align: 'left', font: f });
-      g.people.forEach((p, i) => put(r, 2 + i, p.vals[it], { numFmt: NF, align: 'right', font: f, fill: net ? yellow : undefined }));
-      if (multi && NO_SUM.includes(it)) put(r, nCols, '', { fill: gray });
-      else if (multi) {
-        const a = ws.getCell(r, 2).address, b = ws.getCell(r, 1 + g.people.length).address;
-        const sum = g.people.reduce((s, p) => s + p.vals[it], 0);
-        put(r, nCols, { formula: `SUM(${a}:${b})`, result: sum }, { numFmt: NF, align: 'right', font: f, fill: net ? yellow : gray });
+      const vs = g.people.map(p => p.vals[it]);
+      const colr = v => v === 0 ? C.t4 : v < 0 ? C.pink : C.ink;
+      if (net) {
+        netRow = r;
+        const bd = { top: { style: 'thin', color: { argb: C.ink } }, bottom: { style: 'thin', color: { argb: C.ink } } };
+        put(r, 1, '实　发', { size: 12, bold: true, border: bd, fill: GOLD });
+        vs.forEach((v, i) => put(r, 2 + i, v, { num: true, size: 13, bold: true, border: bd, fill: GOLD }));
+        if (multi) put(r, nCols, vs.reduce((a, b) => a + b, 0), { num: true, size: 13, bold: true, border: bd, fill: GOLD });
+        continue;
+      }
+      put(r, 1, it, { size: 10.5, color: C.t2, shrink: true });
+      vs.forEach((v, i) => put(r, 2 + i, v, { num: true, color: colr(v) }));
+      if (multi) {
+        if (NO_SUM.includes(it)) put(r, nCols, '', { fill: PAPER });
+        else {
+          const sum = vs.reduce((a, b) => a + b, 0);
+          const a1 = ws.getCell(r, 2).address, b1 = ws.getCell(r, 1 + g.people.length).address;
+          put(r, nCols, { formula: `SUM(${a1}:${b1})`, result: sum }, { num: true, color: colr(sum), fill: PAPER });
+        }
       }
     }
+
+    // 员工信息：小一号灰字；卡号放不下就自动缩小字号（不换行）
+    if (info.length) { r++; ws.getRow(r).height = 6; }
     for (const it of info) {
       r++;
-      put(r, 1, it, { align: 'left', font: { color: { argb: 'FF9C958A' } } });
+      put(r, 1, it, { size: 9.5, color: C.t3 });
       g.people.forEach((p, i) => {
         let v = p.info[it] || '';
-        if (it === '司龄' && /^\d{1,3}$/.test(v)) v = +v;   // 司龄存成数字，WPS 不再出绿三角
-        const card = it === '银行卡';
-        put(r, 2 + i, v, { font: { size: card && !cardFits ? 9 : 11 }, wrap: card && !cardFits });
+        if (it === '司龄' && /^\d{1,3}$/.test(v)) v = +v;
+        const split = it === '银行卡' && colW < 17 && v.length > 12;   // 窄列放不下 19 位卡号：前 10 位一行、后面一行
+        if (split) v = v.slice(0, 10) + '\n' + v.slice(10);
+        const c0 = put(r, 2 + i, v, { size: 9.5, color: C.t3, align: 'right' });
+        if (split) { c0.alignment = { ...c0.alignment, wrapText: true }; cardRow = r; }
       });
-      if (it === '银行卡' && !cardFits) cardRow = r;
       if (multi) put(r, nCols, '');
     }
     r++;
-    put(r, 1, '本人签字', { align: 'left' });
-    for (let c = 2; c <= nCols; c++) put(r, c, '', c === nCols && multi ? { fill: gray } : {});
-    // 行高：标题、签字固定，其余平分剩下的高度（15~40 磅）；行太多时靠 fitToHeight 缩
-    const TITLE_H = 36, SIGN_H = 46, n = r - 2;
-    const h = Math.max(15, Math.min(40, (PAGE_H - TITLE_H - SIGN_H) / n));
+    put(r, 1, '本人签字', { size: 10.5, border: { bottom: { style: 'thin', color: { argb: C.t4 } } } });
+    for (let c = 2; c <= nCols; c++) put(r, c, '', { border: { bottom: { style: 'thin', color: { argb: C.t4 } } } });
+    const signRow = r;
+
+    // 行高：标题、签字固定；其余平分，最多 26 磅（行少的店下面留白，跟网页版一样），太多时靠缩放
+    const TITLE_H = 34, SIGN_H = 40;
+    const body = [];
+    for (let i = 2; i < signRow; i++) if (ws.getRow(i).height !== 6) body.push(i);
+    const h = Math.max(15, Math.min(26, (PAGE_H - TITLE_H - SIGN_H) / body.length));
     ws.getRow(1).height = TITLE_H;
-    for (let i = 2; i < r; i++) ws.getRow(i).height = h;
-    if (cardRow) ws.getRow(cardRow).height = Math.max(h, 30);
-    ws.getRow(r).height = SIGN_H;
-    ws.pageSetup.printArea = `A1:${ws.getCell(r, nCols).address}`;
+    body.forEach(i => ws.getRow(i).height = h);
+    ws.getRow(headRow).height = Math.max(h, 20);
+    if (netRow) ws.getRow(netRow).height = Math.max(h + 6, 24);
+    if (cardRow) ws.getRow(cardRow).height = Math.max(h, 28);
+    ws.getRow(signRow).height = SIGN_H;
+    ws.pageSetup.printArea = `A1:${ws.getCell(signRow, nCols).address}`;
   }
 
   const buf = await wb.xlsx.writeBuffer();
