@@ -315,6 +315,16 @@ function rowsFor(g) {
 const fmt = n => n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// 竖版 / 横版各算一遍缩放比例，选字更大的那个（行多时竖版更好，人多行少时横版更好）
+function pickLand(people, rows) {
+  const k = people, n = rows;
+  const sc = (PW, PH) => {
+    const W = 18 + k * Math.max(10, (PW - 18) / k);
+    const H = 82 + n * Math.max(15, Math.min(40, (PH - 82) / n));
+    return Math.min(1, PW / W, PH / H);
+  };
+  return sc(105, 368) > sc(70, 544) + 0.02;
+}
 /* ---------- 预览 ---------- */
 function render() {
   const box = $('#pages');
@@ -327,7 +337,7 @@ function render() {
     const { items, info } = rowsFor(g);
     const multi = g.people.length > 1;
     const nCols = g.people.length + (multi ? 1 : 0);
-    const land = nCols > 6;
+    const land = pickLand(nCols, items.length + info.length + 6);
     const labelW = land ? 20 : 29;
     const cols = `<col style="width:${labelW}%">` + `<col>`.repeat(nCols);
     const cell = (v, extra = '') => `<td class="v${v === 0 ? ' zero' : ''}${v < 0 ? ' neg' : ''}${extra}">${fmt(v)}</td>`;
@@ -474,7 +484,7 @@ async function exportXlsx() {
     let name = g.store.replace(/[\\/?*\[\]:]/g, '').slice(0, 31) || '门店';
     while (used.has(name)) name += '_';
     used.add(name);
-    const land = nCols - 1 > 6;
+    const land = pickLand(nCols - 1, items.length + info.length + (DATA.days ? 6 : 5));
     const ws = wb.addWorksheet(name, {
       pageSetup: {
         paperSize: 11, orientation: land ? 'landscape' : 'portrait',
@@ -525,7 +535,7 @@ async function exportXlsx() {
     if (multi) put(r, nCols, '合计', { font: { bold: true }, fill: peach });
     r++;
     put(r, 1, '职位', { align: 'left', font: { color: { argb: 'FF9C958A' } } });
-    g.people.forEach((p, i) => put(r, 2 + i, p.role, { font: { size: 9 } }));
+    g.people.forEach((p, i) => put(r, 2 + i, p.role, {}));
     if (multi) put(r, nCols, '');
     const NF = '#,##0.00;[Red]-#,##0.00';
     for (const it of items) {
@@ -543,12 +553,12 @@ async function exportXlsx() {
     }
     for (const it of info) {
       r++;
-      put(r, 1, it, { align: 'left', font: { size: 9, color: { argb: 'FF9C958A' } } });
+      put(r, 1, it, { align: 'left', font: { color: { argb: 'FF9C958A' } } });
       g.people.forEach((p, i) => {
         let v = p.info[it] || '';
         if (it === '司龄' && /^\d{1,3}$/.test(v)) v = +v;   // 司龄存成数字，WPS 不再出绿三角
         const card = it === '银行卡';
-        put(r, 2 + i, v, { font: { size: card && !cardFits ? 8 : 9.5 }, wrap: card && !cardFits });
+        put(r, 2 + i, v, { font: { size: card && !cardFits ? 9 : 11 }, wrap: card && !cardFits });
       });
       if (it === '银行卡' && !cardFits) cardRow = r;
       if (multi) put(r, nCols, '');
