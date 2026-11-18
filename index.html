@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>赫眉门店工资单 · A5</title>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/exceljs.min.js"></script>
+<style>
+  :root { --pink:#eaa8b1; --ink:#2b2b2b; --mute:#8a8a8a; --line:#d9d9d9; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; color:var(--ink); background:#f3f1f0; }
+  header.bar { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid #eee; padding:12px 24px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  header.bar h1 { font-size:17px; margin:0 12px 0 0; font-weight:600; }
+  header.bar h1 b { color:var(--pink); }
+  .btn { border:1px solid #ddd; background:#fff; border-radius:8px; padding:7px 14px; font-size:14px; cursor:pointer; }
+  .btn.primary { background:var(--pink); border-color:var(--pink); color:#fff; }
+  .btn:disabled { opacity:.4; cursor:default; }
+  select { border:1px solid #ddd; border-radius:8px; padding:6px 8px; font-size:14px; background:#fff; }
+  label.chk { font-size:14px; display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .info { font-size:13px; color:var(--mute); margin-left:auto; }
+  #drop { margin:60px auto; width:520px; border:2px dashed var(--pink); border-radius:16px; background:#fff; padding:50px 30px; text-align:center; cursor:pointer; }
+  #drop.over { background:#fdf1f3; }
+  #drop p { margin:6px 0; color:var(--mute); font-size:14px; }
+  #drop p.big { font-size:18px; color:var(--ink); }
+  #pages { display:flex; flex-wrap:wrap; gap:24px; padding:24px; justify-content:center; }
+
+  /* ===== A5 页面 ===== */
+  .page { width:148mm; height:210mm; background:#fff; box-shadow:0 2px 10px rgba(0,0,0,.08); padding:8mm 7mm; overflow:hidden; position:relative; }
+  .page .inner { transform-origin:top left; }
+  .page.land { width:210mm; height:148mm; }
+  .slip { width:100%; border-collapse:collapse; font-family:"SimSun","Songti SC",serif; font-size:9.5pt; table-layout:fixed; }
+  .slip td, .slip th { border:0.6pt solid #000; padding:1.2mm 1.5mm; line-height:1.25; }
+  .slip .ttl { background:#00b0f0; font-size:14pt; font-weight:bold; text-align:center; padding:2mm; }
+  .slip .meta { font-size:9pt; border-left:none; border-right:none; border-top:none; padding:1.5mm 0; }
+  .slip .meta span { margin-right:5mm; }
+  .slip th { background:#fce4d6; font-weight:bold; text-align:center; }
+  .slip td.k { background:#fce4d6; text-align:left; }
+  .slip td.v { text-align:right; font-variant-numeric:tabular-nums; }
+  .slip td.v.zero { color:#b5b5b5; }
+  .slip td.v.neg { color:#c00; }
+  .slip td.sum { background:#f7f7f7; }
+  .slip tr.net td { font-weight:bold; background:#fff2cc; font-size:10.5pt; }
+  .slip tr.net td.k { background:#fff2cc; }
+  .slip tr.infor td { font-size:8pt; text-align:center; word-break:break-all; }
+  .slip tr.infor td.k { text-align:left; }
+  .slip tr.sign td { height:11mm; }
+  .page .foot { position:absolute; right:7mm; bottom:4mm; font-size:7pt; color:#aaa; }
+
+  @media print {
+    @page { size:A5; margin:0; }
+    @page land { size:A5 landscape; margin:0; }
+    body { background:#fff; }
+    header.bar, #drop, .noprint { display:none !important; }
+    #pages { display:block; padding:0; }
+    .page { box-shadow:none; break-after:page; page-break-after:always; }
+    .page.land { page:land; }
+    .page .foot { display:none; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1>赫眉门店工资单 <b>A5</b></h1>
+  <button class="btn" id="pick">导入工资总表</button>
+  <select id="fRegion"><option value="">全部区域经理</option></select>
+  <select id="fStore"><option value="">全部门店</option></select>
+  <label class="chk"><input type="checkbox" id="showAll"> 显示全为 0 的项目</label>
+  <button class="btn primary" id="btnXlsx" disabled>导出 Excel</button>
+  <button class="btn" id="btnPrint" disabled>打印 / 存 PDF</button>
+  <span class="info" id="info"></span>
+  <input type="file" id="file" accept=".xlsx" hidden>
+</header>
+
+<div id="drop">
+  <p class="big">把工资总表 .xlsx 拖到这里</p>
+  <p>读取第一个工资表（含「门店」「实发」表头的 sheet）</p>
+  <p>每家门店生成一张 A5 竖版工资单，全店都为 0 的项目自动隐藏</p>
+</div>
+<div id="pages"></div>
+
+<script>
+const LS_KEY = 'hymn-payslip-a5';
+// 永远显示（即使为 0）
+const ALWAYS = ['考勤', '综合月薪', '实发'];
+// 这些项目不做合计
+const NO_SUM = ['考勤'];
+// 实发之后这些列作为员工信息显示在底部
+const INFO = ['入职时间', '离职', '司龄', '银行卡'];
+
+let DATA = null;   // {title, days, items:[label], info:[label], people:[{name,store,region,role,vals:{},info:{}}]}
+const $ = s => document.querySelector(s);
+
+/* ---------- 读取 ---------- */
+const norm = s => String(s ?? '').replace(/\s+/g, '').trim();
+
+const num = v => {
+  if (v == null || v === '') return 0;
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/,/g, ''));
+  return isFinite(n) ? n : 0;
+};
+
+async function readWorkbook(buf) {
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  let A = null, hr = -1;
+  for (const n of wb.SheetNames) {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: null, blankrows: true });
+    for (let r = 0; r < Math.min(6, rows.length); r++) {
+      const vals = (rows[r] || []).map(norm);
+      if (vals.includes('门店') && vals.includes('实发')) { A = rows; hr = r; break; }
+    }
+    if (A) break;
+  }
+  if (!A) throw new Error('没找到含「门店」「实发」表头的工作表');
+
+  const hdr = A[hr].map(norm);
+  const cStore = hdr.indexOf('门店');
+  const cName = cStore - 1;
+  const cRegion = hdr.indexOf('区域经理');
+  const cRole = hdr.indexOf('职位');
+  const netCols = hdr.map((h, i) => h === '实发' ? i : -1).filter(i => i >= 0);
+  const cNetLast = netCols[netCols.length - 1];
+  const cStart = (netCols.length > 1 ? netCols[0] : Math.max(cStore, cRegion, cRole)) + 1;
+
+  // 项目列：第一个实发之后 → 最后一个实发（含）
+  const itemCols = [];
+  for (let c = cStart; c <= cNetLast; c++) if (hdr[c]) itemCols.push(c);
+  const infoCols = [];
+  for (let c = cNetLast + 1; c < hdr.length; c++) if (INFO.includes(hdr[c])) infoCols.push(c);
+
+  // 标题和应出勤天数（表头上面一行）
+  let title = '', days = '';
+  for (const v of (A[0] || [])) {
+    if (typeof v === 'string' && v.trim() && !title) title = v.trim();
+    else if (typeof v === 'number' && !days) days = v;
+  }
+
+  const people = [];
+  for (let r = hr + 1; r < A.length; r++) {
+    const row = A[r] || [];
+    const name = norm(row[cName]);
+    const store = norm(row[cStore]);
+    if (!name || !store || store === '合计' || name === '小计' || name === '合计') continue;
+    const vals = {}, info = {};
+    itemCols.forEach(c => vals[hdr[c]] = num(row[c]));
+    infoCols.forEach(c => {
+      let v = row[c];
+      if (v instanceof Date) v = `${v.getFullYear()}/${v.getMonth() + 1}/${v.getDate()}`;
+      info[hdr[c]] = v == null ? '' : String(v);
+    });
+    people.push({
+      name, store,
+      region: cRegion >= 0 ? norm(row[cRegion]) : '',
+      role: cRole >= 0 ? norm(row[cRole]) : '',
+      vals, info,
+    });
+  }
+  if (!people.length) throw new Error('表里没有员工数据');
+  return { title, days, items: itemCols.map(c => hdr[c]), info: infoCols.map(c => hdr[c]), people };
+}
+
+/* ---------- 分组 ---------- */
+function stores() {
+  const map = new Map();
+  for (const p of DATA.people) {
+    if (!map.has(p.store)) map.set(p.store, { store: p.store, region: p.region, people: [] });
+    map.get(p.store).people.push(p);
+  }
+  return [...map.values()];
+}
+function visibleStores() {
+  const r = $('#fRegion').value, s = $('#fStore').value;
+  return stores().filter(g => (!r || g.region === r) && (!s || g.store === s));
+}
+function rowsFor(g) {
+  const showAll = $('#showAll').checked;
+  const items = DATA.items.filter(it => showAll || ALWAYS.includes(it) || g.people.some(p => p.vals[it] !== 0));
+  const info = DATA.info.filter(it => g.people.some(p => p.info[it]));
+  return { items, info };
+}
+const fmt = n => n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ---------- 预览 ---------- */
+function render() {
+  const box = $('#pages');
+  box.innerHTML = '';
+  if (!DATA) return;
+  const list = visibleStores();
+  for (const g of list) {
+    const { items, info } = rowsFor(g);
+    const multi = g.people.length > 1;
+    const nCols = g.people.length + (multi ? 1 : 0);
+    const land = nCols > 6;
+    const labelW = land ? 22 : 30;
+    const cols = `<col style="width:${labelW}%">` + `<col>`.repeat(nCols);
+    const span = nCols + 1;
+    let h = `<table class="slip"><colgroup>${cols}</colgroup>`;
+    h += `<tr><td class="ttl" colspan="${span}">${esc(DATA.title || '工资单')}</td></tr>`;
+    h += `<tr><td class="meta" colspan="${span}"><span>门店：${esc(g.store)}</span><span>区域经理：${esc(g.region)}</span>${DATA.days ? `<span>应出勤：${DATA.days} 天</span>` : ''}</td></tr>`;
+    h += `<tr><th>项目</th>${g.people.map(p => `<th>${esc(p.name)}</th>`).join('')}${multi ? '<th>合计</th>' : ''}</tr>`;
+    h += `<tr class="infor"><td class="k">职位</td>${g.people.map(p => `<td>${esc(p.role)}</td>`).join('')}${multi ? '<td></td>' : ''}</tr>`;
+    for (const it of items) {
+      const vs = g.people.map(p => p.vals[it]);
+      const sum = vs.reduce((a, b) => a + b, 0);
+      const cell = (v, extra = '') => `<td class="v${v === 0 ? ' zero' : ''}${v < 0 ? ' neg' : ''}${extra}">${fmt(v)}</td>`;
+      h += `<tr${it === '实发' ? ' class="net"' : ''}><td class="k">${esc(it)}</td>${vs.map(v => cell(v)).join('')}${multi ? (NO_SUM.includes(it) ? '<td class="sum"></td>' : cell(sum, ' sum')) : ''}</tr>`;
+    }
+    for (const it of info) {
+      h += `<tr class="infor"><td class="k">${esc(it)}</td>${g.people.map(p => `<td>${esc(p.info[it] || '')}</td>`).join('')}${multi ? '<td></td>' : ''}</tr>`;
+    }
+    h += `<tr class="sign"><td class="k">本人签字</td>${g.people.map(() => '<td></td>').join('')}${multi ? '<td style="background:#f7f7f7"></td>' : ''}</tr>`;
+    h += `</table>`;
+
+    const page = document.createElement('div');
+    page.className = 'page' + (land ? ' land' : '');
+    page.innerHTML = `<div class="inner">${h}</div><div class="foot">${items.length} 项</div>`;
+    box.appendChild(page);
+  }
+  // 内容超出一页时整体缩小
+  requestAnimationFrame(() => {
+    box.querySelectorAll('.page').forEach(pg => {
+      const inner = pg.querySelector('.inner');
+      inner.style.zoom = 1;
+      const avail = pg.clientHeight - parseFloat(getComputedStyle(pg).paddingTop) * 2;
+      const need = inner.scrollHeight;
+      if (need > avail) inner.style.zoom = (avail / need).toFixed(3);
+    });
+  });
+  $('#info').textContent = `${list.length} 家门店 · ${list.reduce((a, g) => a + g.people.length, 0)} 人`;
+}
+
+function fillFilters() {
+  const regions = [...new Set(DATA.people.map(p => p.region).filter(Boolean))];
+  const keepR = $('#fRegion').value, keepS = $('#fStore').value;
+  $('#fRegion').innerHTML = '<option value="">全部区域经理</option>' + regions.map(r => `<option>${esc(r)}</option>`).join('');
+  if (regions.includes(keepR)) $('#fRegion').value = keepR;
+  fillStores(keepS);
+}
+function fillStores(keep) {
+  const r = $('#fRegion').value;
+  const list = stores().filter(g => !r || g.region === r).map(g => g.store);
+  $('#fStore').innerHTML = '<option value="">全部门店</option>' + list.map(s => `<option>${esc(s)}</option>`).join('');
+  if (list.includes(keep)) $('#fStore').value = keep;
+}
+
+/* ---------- 导出 Excel ---------- */
+async function exportXlsx() {
+  const wb = new ExcelJS.Workbook();
+  const thin = { style: 'thin', color: { argb: 'FF000000' } };
+  const border = { top: thin, left: thin, bottom: thin, right: thin };
+  const peach = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } };
+  const yellow = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+  const gray = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7F7F7' } };
+  const font = (o = {}) => ({ name: '宋体', size: 10, ...o });
+  const used = new Set();
+
+  for (const g of visibleStores()) {
+    const { items, info } = rowsFor(g);
+    const multi = g.people.length > 1;
+    const nCols = 1 + g.people.length + (multi ? 1 : 0);
+    let name = g.store.replace(/[\\/?*\[\]:]/g, '').slice(0, 31) || '门店';
+    while (used.has(name)) name += '_';
+    used.add(name);
+    const land = nCols - 1 > 6;
+    const ws = wb.addWorksheet(name, {
+      pageSetup: {
+        paperSize: 11, orientation: land ? 'landscape' : 'portrait',
+        fitToPage: true, fitToWidth: 1, fitToHeight: 1, horizontalCentered: true,
+        margins: { left: 0.3, right: 0.3, top: 0.35, bottom: 0.35, header: 0.1, footer: 0.1 },
+      },
+    });
+    ws.getColumn(1).width = 22;
+    for (let c = 2; c <= nCols; c++) ws.getColumn(c).width = 13;
+
+    // 标题
+    ws.mergeCells(1, 1, 1, nCols);
+    const t = ws.getCell(1, 1);
+    t.value = DATA.title || '工资单';
+    t.font = font({ size: 14, bold: true });
+    t.alignment = { horizontal: 'center', vertical: 'middle' };
+    t.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00B0F0' } };
+    ws.getRow(1).height = 26;
+    ws.mergeCells(2, 1, 2, nCols);
+    ws.getCell(2, 1).value = `门店：${g.store}    区域经理：${g.region}` + (DATA.days ? `    应出勤：${DATA.days} 天` : '');
+    ws.getCell(2, 1).font = font();
+    ws.getRow(2).height = 18;
+
+    const put = (r, c, v, o = {}) => {
+      const cell = ws.getCell(r, c);
+      cell.value = v;
+      cell.border = border;
+      cell.font = font(o.font || {});
+      cell.alignment = { vertical: 'middle', horizontal: o.align || 'center', wrapText: !!o.wrap };
+      if (o.fill) cell.fill = o.fill;
+      if (o.numFmt) cell.numFmt = o.numFmt;
+      return cell;
+    };
+    let r = 3;
+    put(r, 1, '项目', { font: { bold: true }, fill: peach });
+    g.people.forEach((p, i) => put(r, 2 + i, p.name, { font: { bold: true }, fill: peach }));
+    if (multi) put(r, nCols, '合计', { font: { bold: true }, fill: peach });
+    r++;
+    put(r, 1, '职位', { fill: peach, align: 'left' });
+    g.people.forEach((p, i) => put(r, 2 + i, p.role, { font: { size: 9 } }));
+    if (multi) put(r, nCols, '');
+    const NF = '#,##0.00;[Red]-#,##0.00';
+    for (const it of items) {
+      r++;
+      const net = it === '实发';
+      const f = net ? { bold: true, size: 11 } : {};
+      put(r, 1, it, { fill: net ? yellow : peach, align: 'left', font: f });
+      g.people.forEach((p, i) => put(r, 2 + i, p.vals[it], { numFmt: NF, align: 'right', font: f, fill: net ? yellow : undefined }));
+      if (multi && NO_SUM.includes(it)) put(r, nCols, '', { fill: gray });
+      else if (multi) {
+        const a = ws.getCell(r, 2).address, b = ws.getCell(r, 1 + g.people.length).address;
+        const sum = g.people.reduce((s, p) => s + p.vals[it], 0);
+        put(r, nCols, { formula: `SUM(${a}:${b})`, result: sum }, { numFmt: NF, align: 'right', font: f, fill: net ? yellow : gray });
+      }
+    }
+    for (const it of info) {
+      r++;
+      put(r, 1, it, { fill: peach, align: 'left' });
+      g.people.forEach((p, i) => put(r, 2 + i, p.info[it] || '', { font: { size: 8 }, wrap: true }));
+      if (multi) put(r, nCols, '');
+    }
+    r++;
+    put(r, 1, '本人签字', { fill: peach, align: 'left' });
+    for (let c = 2; c <= nCols; c++) put(r, c, '', c === nCols && multi ? { fill: gray } : {});
+    ws.getRow(r).height = 32;
+    for (let i = 3; i < r; i++) ws.getRow(i).height = 16;
+    ws.pageSetup.printArea = `A1:${ws.getCell(r, nCols).address}`;
+  }
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const s = $('#fStore').value || $('#fRegion').value || '全部门店';
+  a.download = `${(DATA.title || '工资单').replace(/[\\/:*?"<>|]/g, '')}_${s}_A5.xlsx`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ---------- 事件 ---------- */
+async function load(file) {
+  try {
+    DATA = await readWorkbook(await file.arrayBuffer());
+    try { localStorage.setItem(LS_KEY, JSON.stringify(DATA)); } catch (e) {}
+    ready();
+  } catch (e) {
+    alert('读取失败：' + e.message);
+  }
+}
+function ready() {
+  $('#drop').style.display = 'none';
+  $('#btnXlsx').disabled = $('#btnPrint').disabled = false;
+  fillFilters();
+  render();
+}
+function saveUI() {
+  localStorage.setItem(LS_KEY + '-ui', JSON.stringify({ r: $('#fRegion').value, s: $('#fStore').value, all: $('#showAll').checked }));
+}
+
+$('#pick').onclick = () => $('#file').click();
+$('#drop').onclick = () => $('#file').click();
+$('#file').onchange = e => { if (e.target.files[0]) load(e.target.files[0]); e.target.value = ''; };
+['dragover', 'dragenter'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); $('#drop').classList.add('over'); }));
+document.addEventListener('dragleave', () => $('#drop').classList.remove('over'));
+document.addEventListener('drop', e => {
+  e.preventDefault(); $('#drop').classList.remove('over');
+  const f = e.dataTransfer.files[0]; if (f) load(f);
+});
+$('#fRegion').onchange = () => { fillStores(''); render(); saveUI(); };
+$('#fStore').onchange = () => { render(); saveUI(); };
+$('#showAll').onchange = () => { render(); saveUI(); };
+$('#btnXlsx').onclick = exportXlsx;
+$('#btnPrint').onclick = () => window.print();
+
+// 刷新后恢复
+try {
+  const saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+  const ui = JSON.parse(localStorage.getItem(LS_KEY + '-ui') || '{}');
+  if (saved && saved.people) {
+    DATA = saved;
+    $('#showAll').checked = !!ui.all;
+    fillFilters();
+    if (ui.r) { $('#fRegion').value = ui.r; fillStores(ui.s); }
+    else if (ui.s) $('#fStore').value = ui.s;
+    ready();
+  }
+} catch (e) {}
+</script>
+</body>
+</html>
