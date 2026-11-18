@@ -146,6 +146,19 @@ button,input,select{font:inherit;color:inherit}
 .xsel-pop a.on::before{content:'';position:absolute;left:14px;top:50%;width:6px;height:6px;margin-top:-3px;background:var(--acc)}
 @media print{.xsel-pop{display:none}}
 
+/* 放大看：点一张工资单 → 铺满屏幕高度，←/→ 翻店，Esc 关 */
+.page{cursor:zoom-in}
+#lb{position:fixed;inset:0;z-index:500;background:rgba(22,20,15,.55);display:flex;align-items:center;justify-content:center;cursor:zoom-out}
+#lb .stage{position:relative;transform-origin:center center;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+#lb .stage .page{cursor:default;border:0}
+#lb .nav2{position:fixed;top:50%;transform:translateY(-50%);width:48px;height:48px;border:1px solid rgba(255,255,255,.6);color:#fff;background:transparent;font-size:20px;cursor:pointer}
+#lb .nav2:hover{background:#fff;color:var(--ink)}
+#lb .prev{left:28px}#lb .next{right:28px}
+#lb .cap{position:fixed;left:0;right:0;bottom:18px;text-align:center;color:#fff;font-size:12.5px;letter-spacing:.08em}
+.page.dense .slip td{padding-top:.75mm;padding-bottom:.75mm}
+.page.dense .slip td.v{font-size:9pt}
+@media print{#lb{display:none!important}}
+
 @media (max-width:860px){ .sidebar{position:static;width:auto;border-right:0;border-bottom:1px solid var(--line-2)} .main{margin-left:0} .nav,.sidedata{display:none} }
 @media print{
   @page{size:A5;margin:0}
@@ -336,7 +349,7 @@ function render() {
     h += `</table>`;
 
     const page = document.createElement('div');
-    page.className = 'page' + (land ? ' land' : '');
+    page.className = 'page' + (land ? ' land' : '') + (items.length + info.length > 26 ? ' dense' : '');
     page.innerHTML = `<div class="inner">${h}</div><div class="foot"><span>赫眉 HYMN</span><span>${esc(g.store)} · ${items.length} 项</span></div>`;
     box.appendChild(page);
   }
@@ -690,6 +703,41 @@ try {
   addEventListener('scroll', e => { if (POP && !POP.el.contains(e.target)) closePop(); }, true);
   document.querySelectorAll('select.inp').forEach(xsel);
 })();
+
+/* ---------- 放大看 ---------- */
+let LB = -1;
+function openLb(i) {
+  const pages = [...document.querySelectorAll('#pages .page')];
+  if (!pages.length) return;
+  LB = (i + pages.length) % pages.length;
+  let lb = $('#lb');
+  if (!lb) {
+    lb = document.createElement('div'); lb.id = 'lb';
+    lb.innerHTML = '<div class="stage"></div><button class="nav2 prev" title="上一家（←）">‹</button><button class="nav2 next" title="下一家（→）">›</button><div class="cap"></div>';
+    document.body.appendChild(lb);
+    lb.addEventListener('click', e => {
+      if (e.target.closest('.prev')) { e.stopPropagation(); openLb(LB - 1); }
+      else if (e.target.closest('.next')) { e.stopPropagation(); openLb(LB + 1); }
+      else if (!e.target.closest('.stage')) closeLb();
+    });
+  }
+  const src = pages[LB], st = lb.querySelector('.stage');
+  st.innerHTML = '';
+  const cp = src.cloneNode(true);
+  st.appendChild(cp);
+  const k = Math.min((innerHeight - 100) / src.offsetHeight, (innerWidth - 160) / src.offsetWidth);
+  st.style.transform = `scale(${k})`;
+  lb.querySelector('.cap').textContent = `${LB + 1} / ${pages.length}　←  → 翻页　Esc 关闭`;
+}
+function closeLb() { const lb = $('#lb'); if (lb) lb.remove(); LB = -1; }
+$('#pages').addEventListener('click', e => { const pg = e.target.closest('.page'); if (pg) openLb([...$('#pages').children].indexOf(pg)); });
+document.addEventListener('keydown', e => {
+  if (LB < 0) return;
+  if (e.key === 'Escape') closeLb();
+  else if (e.key === 'ArrowLeft') openLb(LB - 1);
+  else if (e.key === 'ArrowRight') openLb(LB + 1);
+});
+addEventListener('resize', () => { if (LB >= 0) openLb(LB); });
 </script>
 </body>
 </html>
