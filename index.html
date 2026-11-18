@@ -589,13 +589,15 @@ $('#fRegion').onclick = e => {
 };
 $('#showAll').onchange = () => { render(); saveUI(); };
 function paintOpt() {
-  $('#optCols').innerHTML = '<b>可选列</b>' + OPT.map(c => `<label class="tgl"><input type="checkbox" data-c="${c}"${OPT_ON.has(c) ? ' checked' : ''}> ${c}</label>`).join('');
+  const all = OPT.every(c => OPT_ON.has(c));
+  $('#optCols').innerHTML = `<b>可选列</b><label class="tgl"><input type="checkbox" data-c="*"${all ? ' checked' : ''}> 全选</label>` + OPT.map(c => `<label class="tgl"><input type="checkbox" data-c="${c}"${OPT_ON.has(c) ? ' checked' : ''}> ${c}</label>`).join('');
 }
 paintOpt();
 $('#optCols').onchange = e => {
   const c = e.target.dataset.c; if (!c) return;
-  e.target.checked ? OPT_ON.add(c) : OPT_ON.delete(c);
-  render(); saveUI();
+  if (c === '*') OPT_ON = new Set(e.target.checked ? OPT : []);
+  else e.target.checked ? OPT_ON.add(c) : OPT_ON.delete(c);
+  paintOpt(); render(); saveUI();
 };
 $('#btnXlsx').onclick = exportXlsx;
 $('#vMode').onclick = e => {
