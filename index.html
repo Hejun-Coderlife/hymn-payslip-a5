@@ -95,7 +95,7 @@ button,input,select{font:inherit;color:inherit}
 .inner table.hs{margin:0 auto}
 .hs{border-collapse:collapse;font-family:"SimSun","Songti SC",serif;font-size:8pt;white-space:nowrap}
 .hs td,.hs th{border:0.6pt solid #000;padding:1.6mm 1mm;text-align:center;vertical-align:middle}
-.hs th{font-weight:bold;white-space:normal;width:13mm;line-height:1.2}
+.hs th{font-weight:bold;white-space:normal;width:13mm;line-height:1.2;text-wrap:balance}
 .hs th:first-child{width:6mm}
 .hs th.pe,.hs td.n{min-width:13mm}
 .hs .t td{font-size:12pt;font-weight:bold;padding:1.8mm}
@@ -510,8 +510,16 @@ async function exportXlsx() {
     ws.getRow(1).height = 26;
     // 第 2 行：表头
     ['', '', '门店', '区域经理', '职位'].forEach((t, i) => put(2, i + 1, t, { bold: true, fill: 'FFF2F2F2' }));   // 第 2 行浅灰底
-    let peach = false;
-    cols.forEach((c, i) => { if (c === PEACH_FROM) peach = true; if (i === cols.length - 1) peach = false; put(2, 6 + i, c, { bold: true, fill: 'FFF2F2F2' }); });
+    // 表头按列宽均分换行，避免最后一行只剩一个字（综合月薪 → 综合/月薪）
+    const wrapEven = (t, w) => {
+      const a = [...t], per = Math.max(1, Math.floor(w / 2));   // 一个汉字约占 2 个字符宽（8.5 宽放 4 字）
+      const n = Math.ceil(a.length / per);
+      if (n <= 1) return t;
+      const k = Math.ceil(a.length / n), out = [];
+      for (let i = 0; i < a.length; i += k) out.push(a.slice(i, i + k).join(''));
+      return out.join('\n');
+    };
+    cols.forEach((c, i) => put(2, 6 + i, wrapEven(c, ws.getColumn(6 + i).width), { bold: true, fill: 'FFF2F2F2' }));
     ws.getRow(2).height = 46;
     const NF = '0.00_);[Red]\\(0.00\\)';
     let r = 2;
