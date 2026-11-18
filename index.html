@@ -67,6 +67,8 @@ button,input,select{font:inherit;color:inherit}
 .inp:focus{outline:none;border-color:var(--ink)}
 .tgl{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--t2);cursor:pointer;user-select:none}
 .tgl input{appearance:none;-webkit-appearance:none;width:14px;height:14px;border:1px solid var(--chip);background:#fff;cursor:pointer;position:relative}
+.optc{display:inline-flex;align-items:center;gap:14px;flex-wrap:wrap;padding-left:14px;border-left:1px solid var(--line-2)}
+.optc > b{font-weight:400;font-size:13px;color:var(--t3,#9a958a)}
 .tgl input:checked{background:var(--acc);border-color:var(--acc)}
 .tgl input:checked::after{content:'';position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
 .filters .cnt{margin-left:auto;font-size:12px;color:var(--t3)}
@@ -220,6 +222,7 @@ button,input,select{font:inherit;color:inherit}
       <span class="fseg" id="fRegion"></span>
       <span class="xsel" id="msWrap"><button type="button" class="inp xsel-btn" id="fStore">全部门店</button></span>
       <label class="tgl"><input type="checkbox" id="showAll"> 隐藏全店为 0 的列</label>
+      <span class="optc" id="optCols"></span>
       <span class="cnt" id="info"></span>
     </div>
     <div class="kpirow" id="kpi"></div>
@@ -326,11 +329,15 @@ function visibleStores() {
 }
 // 横版列（2026-11-18 用户给的样式图）：实发、考勤 + 这些项目 + 实发
 const COLS = ['考勤', '综合月薪', '津贴', '个人业绩提成总额', '合伙人医美产康激励5%', '后院手工费', '线上绩效激励', '拓卡',
-  '工龄津贴', '微信激励', '贴花', '转岗激励', '高温补贴', '总店业绩激励', '社保（个人）', '社保（单位）-个人承担', '社保（单位）-单位承担'];
+  '工龄津贴', '微信激励', '贴花', '转岗激励', '高温补贴', '整店销售额', '请假期间业绩', '公摊', '总店业绩激励', '社保（个人）', '社保（单位）-个人承担', '社保（单位）-单位承担'];
 const PEACH_FROM = '综合月薪';
+// 可选列：默认不显示，网页上勾选才出现
+const OPT = ['转岗激励', '高温补贴', '整店销售额', '请假期间业绩', '公摊'];
+let OPT_ON = new Set();
 function colsFor(g) {
   const hide = $('#showAll').checked;   // 勾上 = 隐藏全店为 0 的列
   const cols = COLS.filter(c => DATA.items.includes(c) || c === '考勤')
+    .filter(c => !OPT.includes(c) || OPT_ON.has(c))
     .filter(c => !hide || ALWAYS.includes(c) || g.people.some(p => (p.vals[c] || 0) !== 0));
   return ['实发', ...cols, '实发'];
 }
@@ -498,9 +505,9 @@ async function exportXlsx() {
     put(1, 1, DATA.title || '工资单', { size: 14, bold: true });
     ws.getRow(1).height = 26;
     // 第 2 行：表头
-    ['', '', '门店', '区域经理', '职位'].forEach((t, i) => put(2, i + 1, t, { bold: true }));
+    ['', '', '门店', '区域经理', '职位'].forEach((t, i) => put(2, i + 1, t, { bold: true, fill: 'FFF2F2F2' }));   // 第 2 行浅灰底
     let peach = false;
-    cols.forEach((c, i) => { if (c === PEACH_FROM) peach = true; if (i === cols.length - 1) peach = false; put(2, 6 + i, c, { bold: true }); });
+    cols.forEach((c, i) => { if (c === PEACH_FROM) peach = true; if (i === cols.length - 1) peach = false; put(2, 6 + i, c, { bold: true, fill: 'FFF2F2F2' }); });
     ws.getRow(2).height = 46;
     const NF = '0.00_);[Red]\\(0.00\\)';
     let r = 2;
@@ -558,7 +565,7 @@ function ready() {
   render();
 }
 function saveUI() {
-  localStorage.setItem(LS_KEY + '-ui', JSON.stringify({ r: REGION, sel: [...SEL], all: $('#showAll').checked }));
+  localStorage.setItem(LS_KEY + '-ui', JSON.stringify({ r: REGION, sel: [...SEL], all: $('#showAll').checked, opt: [...OPT_ON] }));
 }
 
 $('#pick').onclick = () => $('#file').click();
@@ -577,6 +584,15 @@ $('#fRegion').onclick = e => {
   SEL.clear(); fillStores(); render(); saveUI();
 };
 $('#showAll').onchange = () => { render(); saveUI(); };
+function paintOpt() {
+  $('#optCols').innerHTML = '<b>可选列</b>' + OPT.map(c => `<label class="tgl"><input type="checkbox" data-c="${c}"${OPT_ON.has(c) ? ' checked' : ''}> ${c}</label>`).join('');
+}
+paintOpt();
+$('#optCols').onchange = e => {
+  const c = e.target.dataset.c; if (!c) return;
+  e.target.checked ? OPT_ON.add(c) : OPT_ON.delete(c);
+  render(); saveUI();
+};
 $('#btnXlsx').onclick = exportXlsx;
 $('#vMode').onclick = e => {
   const a = e.target.closest('a'); if (!a) return;
@@ -596,6 +612,7 @@ try {
   if (saved && saved.people) {
     DATA = saved;
     $('#showAll').checked = !!ui.all;
+    OPT_ON = new Set(ui.opt || []); paintOpt();
     REGION = ui.r || '';
     SEL = new Set(ui.sel || []);
     ready();
