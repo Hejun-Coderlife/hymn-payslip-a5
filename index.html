@@ -435,7 +435,7 @@ function openMs() {
   const btn = $('#fStore'), r = btn.getBoundingClientRect();
   const el = document.createElement('div');
   el.className = 'xsel-pop ms';
-  el.innerHTML = `<input class="xsel-q" type="search" placeholder="搜索门店" autocomplete="off">
+  el.innerHTML = `<input class="xsel-q" type="search" placeholder="搜索门店，多家用 / 或空格隔开" autocomplete="off">
     <div class="ms-ops"><a data-op="all">全选</a><a data-op="vis">勾选搜到的</a><a data-op="none">清空</a><span class="ms-n"></span></div>
     ${list.map(s => `<a class="ms-it" data-s="${esc(s)}"><i class="ck"></i>${esc(s)}</a>`).join('')}
     <div class="xsel-empty" style="display:none">没有匹配的</div>`;
@@ -453,8 +453,9 @@ function openMs() {
   const apply = () => { paint(); fillStores(); render(); saveUI(); };
   let composing = false;
   const filt = () => {
-    const w = q.value.trim().toLowerCase(); let n = 0;
-    el.querySelectorAll('.ms-it').forEach(a => { const ok = !w || a.dataset.s.toLowerCase().includes(w); a.style.display = ok ? '' : 'none'; if (ok) n++; });
+    // 可一次搜多家：用 / 空格 逗号 顿号 分号 隔开，命中任意一个就显示
+    const ws = q.value.toLowerCase().split(/[\/\\\s,，、;；|｜]+/).filter(Boolean); let n = 0;
+    el.querySelectorAll('.ms-it').forEach(a => { const nm = a.dataset.s.toLowerCase(); const ok = !ws.length || ws.some(w => nm.includes(w)); a.style.display = ok ? '' : 'none'; if (ok) n++; });
     el.querySelector('.xsel-empty').style.display = n ? 'none' : '';
   };
   q.addEventListener('compositionstart', () => { composing = true; });
@@ -462,8 +463,9 @@ function openMs() {
   q.addEventListener('input', () => { if (!composing) filt(); });
   q.addEventListener('keydown', ev => {   // 回车 = 勾上第一个搜到的，并清空搜索接着搜下一家
     if (ev.key !== 'Enter' || composing) return;
-    const first = [...el.querySelectorAll('.ms-it')].find(a => a.style.display !== 'none');
-    if (first) { SEL.add(first.dataset.s); q.value = ''; filt(); apply(); }
+    const vis = [...el.querySelectorAll('.ms-it')].filter(a => a.style.display !== 'none');
+    const multi = q.value.trim().split(/[\/\\\s,，、;；|｜]+/).filter(Boolean).length > 1;   // 搜多家时回车全勾
+    if (vis.length) { (multi ? vis : vis.slice(0, 1)).forEach(a => SEL.add(a.dataset.s)); q.value = ''; filt(); apply(); }
   });
   el.addEventListener('click', ev => {
     ev.stopPropagation();
