@@ -346,10 +346,7 @@ function render() {
   const list = visibleStores();
   list.forEach((g, k0) => {
     const cols = colsFor(g), N = 5 + cols.length;
-    const red = N >= 10 ? 5 : Math.max(1, N - 6), blue = N - red - Math.min(5, N - red - 5);
-    let h = `<table class="hs"><tr class="t"><td colspan="${blue}" class="blue">${esc(DATA.title || '工资单')}</td>`;
-    if (red) h += `<td colspan="${red}" class="red">${DATA.days || ''}</td>`;
-    if (N - blue - red) h += `<td colspan="${N - blue - red}" class="nob"></td>`;
+    let h = `<table class="hs"><tr class="t"><td colspan="${N}">${esc(DATA.title || '工资单')}</td>`;
     h += `</tr><tr class="hd"><th></th><th></th><th>门店</th><th>区域经理</th><th>职位</th>`;
     let peach = false;
     cols.forEach((c, i) => { if (c === PEACH_FROM) peach = true; if (i === cols.length - 1) peach = false; h += `<th${peach ? ' class="pe"' : ''}>${esc(c)}</th>`; });
@@ -479,7 +476,6 @@ async function exportXlsx() {
   const used = new Set();
   for (const g of visibleStores()) {
     const cols = colsFor(g), N = 5 + cols.length;
-    const red = N >= 10 ? 5 : Math.max(1, N - 6), blue = N - red - Math.min(5, N - red - 5);
     let name = g.store.replace(/[\\/?*\[\]:]/g, '').slice(0, 31) || '门店';
     while (used.has(name)) name += '_';
     used.add(name);
@@ -497,11 +493,9 @@ async function exportXlsx() {
       if (o.fill) cell.fill = fill(o.fill);
       if (o.nf) cell.numFmt = o.nf;
     };
-    // 第 1 行：蓝底标题 + 红块（应出勤天数）
-    ws.mergeCells(1, 1, 1, blue);
+    // 第 1 行：标题整行合并居中
+    ws.mergeCells(1, 1, 1, N);
     put(1, 1, DATA.title || '工资单', { size: 14, bold: true });
-    if (red) { ws.mergeCells(1, blue + 1, 1, blue + red); put(1, blue + 1, DATA.days || ''); }
-    for (let c = blue + red + 1; c <= N; c++) ws.getCell(1, c).border = {};
     ws.getRow(1).height = 26;
     // 第 2 行：表头
     ['', '', '门店', '区域经理', '职位'].forEach((t, i) => put(2, i + 1, t, { bold: true }));
