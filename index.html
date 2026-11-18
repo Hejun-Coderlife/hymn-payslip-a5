@@ -208,7 +208,6 @@ button,input,select{font:inherit;color:inherit}
     <div class="tools">
       <button class="btn ghost" id="btnTpl">下载填写模板</button>
       <button class="btn ghost" id="pick">重新导入</button>
-      <button class="btn" id="btnPrint" disabled>打印 / 存 PDF</button>
       <button class="btn primary" id="btnXlsx" disabled>导出 Excel</button>
     </div>
   </header>
@@ -616,7 +615,7 @@ function ready() {
   $('#eyebrow').textContent = '赫眉 HYMN · ' + (DATA.title || '工资');
   $('#sidedata').innerHTML = `已导入<br><b>${esc(FILE || DATA.file || '工资总表')}</b><br>${DATA.people.length} 人 · ${stores().length} 家店<br><a id="clr">清空</a>`;
   $('#clr').onclick = () => { localStorage.removeItem(LS_KEY); location.reload(); };
-  $('#btnXlsx').disabled = $('#btnPrint').disabled = false;
+  $('#btnXlsx').disabled = false;
   fillFilters();
   render();
 }
@@ -662,7 +661,6 @@ $('#vMode').onclick = e => {
   localStorage.setItem(LS_KEY + '-v', a.dataset.v);
 };
 if (localStorage.getItem(LS_KEY + '-v') === 'ov') $('#vMode [data-v="ov"]').click();
-$('#btnPrint').onclick = () => window.print();
 
 // 刷新后恢复
 try {
