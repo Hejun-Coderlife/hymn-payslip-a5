@@ -121,6 +121,22 @@ button,input,select{font:inherit;color:inherit}
 .slip tr.sign td.k{color:var(--t1);font-size:8pt}
 .page .foot{position:absolute;left:9mm;right:9mm;bottom:5mm;display:flex;justify-content:space-between;font-size:6.5pt;color:var(--t4);letter-spacing:.1em}
 
+/* 自己画的下拉框（同 vip.hemei.asia 的 xsel）：直角、黑色细边、选中项前一个香槟金小方块，选项超过 10 个带搜索 */
+.xsel{position:relative;display:inline-block;vertical-align:middle}
+.xsel > select{display:none}
+.xsel-btn{display:block;width:100%;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:30px}
+.xsel-btn:hover,.xsel.open .xsel-btn{border-color:var(--ink)}
+.xsel.open .xsel-btn{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 6l5-6 5 6' fill='none' stroke='%2316140F'/%3E%3C/svg%3E")}
+.xsel-pop{position:fixed;z-index:1000;background:#fff;border:1px solid var(--ink);padding:4px 0;max-height:min(340px,60vh);overflow:auto;box-shadow:0 10px 30px rgba(22,20,15,.08)}
+.xsel-q{position:sticky;top:-4px;display:block;width:calc(100% - 16px);margin:0 8px 4px;padding:8px 10px;border:0;border-bottom:1px solid var(--line);background:#fff;font:inherit;font-size:13px;outline:none;color:var(--ink)}
+.xsel-q:focus{border-bottom-color:var(--ink)}
+.xsel-empty{padding:9px 18px;font-size:12.5px;color:var(--t3)}
+.xsel-pop a{display:block;position:relative;padding:9px 18px 9px 30px;font-size:13px;line-height:1.4;white-space:nowrap;cursor:pointer;color:var(--t2)}
+.xsel-pop a:hover{background:var(--paper);color:var(--ink)}
+.xsel-pop a.on{color:var(--ink)}
+.xsel-pop a.on::before{content:'';position:absolute;left:14px;top:50%;width:6px;height:6px;margin-top:-3px;background:var(--acc)}
+@media print{.xsel-pop{display:none}}
+
 @media (max-width:860px){ .sidebar{position:static;width:auto;border-right:0;border-bottom:1px solid var(--line-2)} .main{margin-left:0} .nav,.sidedata{display:none} }
 @media print{
   @page{size:A5;margin:0}
@@ -508,6 +524,87 @@ try {
     ready();
   }
 } catch (e) {}
+
+/* ---------- 自己画的下拉框（照 vip.hemei.asia common.js 的 xsel） ---------- */
+(function () {
+  let POP = null;
+  const closePop = () => { if (POP) { POP.el.remove(); POP.wrap.classList.remove('open'); POP = null; } };
+  function xsel(sel) {
+    if (sel.dataset.x) return; sel.dataset.x = '1';
+    const wrap = document.createElement('span'), btn = document.createElement('button');
+    wrap.className = 'xsel'; btn.type = 'button';
+    btn.className = sel.className + ' xsel-btn';
+    sel.parentNode.insertBefore(wrap, sel); wrap.appendChild(btn); wrap.appendChild(sel);
+    function sync() {
+      const o = sel.options[sel.selectedIndex];
+      btn.textContent = o ? o.textContent : '';
+      const n = [...sel.options].reduce((m, x) => Math.max(m, x.textContent.length), 0);
+      btn.style.minWidth = `calc(${n}em + 44px)`;
+      btn.disabled = sel.disabled;
+    }
+    // 代码直接赋 value / 换 options 不会触发事件，这里盯着
+    ['value', 'selectedIndex'].forEach(k => {
+      const d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, k);
+      Object.defineProperty(sel, k, { get: () => d.get.call(sel), set: v => { d.set.call(sel, v); sync(); }, configurable: true });
+    });
+    new MutationObserver(sync).observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+    sel.addEventListener('change', sync);
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (POP && POP.wrap === wrap) { closePop(); return; }
+      closePop();
+      const r = btn.getBoundingClientRect(), el = document.createElement('div');
+      el.className = 'xsel-pop';
+      el.innerHTML = [...sel.options].map((o, i) => `<a data-i="${i}"${i === sel.selectedIndex ? ' class="on"' : ''}>${esc(o.textContent)}</a>`).join('');
+      let q = null;
+      if (sel.options.length > 10) {
+        q = document.createElement('input');
+        q.className = 'xsel-q'; q.type = 'search'; q.placeholder = '搜索'; q.autocomplete = 'off';
+        el.insertBefore(q, el.firstChild);
+      }
+      document.body.appendChild(el);
+      el.style.minWidth = Math.max(r.width, q ? 180 : 0) + 'px';
+      const below = innerHeight - r.bottom - 8, h = el.offsetHeight;
+      el.style.left = Math.min(r.left, innerWidth - el.offsetWidth - 8) + 'px';
+      el.style.top = (h > below && r.top > below ? Math.max(8, r.top - h - 4) : r.bottom + 4) + 'px';
+      wrap.classList.add('open');
+      POP = { el, wrap };
+      const on = el.querySelector('.on'); if (on) el.scrollTop = on.offsetTop - el.clientHeight / 2;
+      if (q) {
+        let composing = false;
+        const empty = document.createElement('div');
+        empty.className = 'xsel-empty'; empty.textContent = '没有匹配的'; empty.style.display = 'none'; el.appendChild(empty);
+        const filt = () => {
+          const w = q.value.trim().toLowerCase(); let n = 0;
+          el.querySelectorAll('a[data-i]').forEach(x => { const ok = !w || x.textContent.toLowerCase().includes(w); x.style.display = ok ? '' : 'none'; if (ok) n++; });
+          empty.style.display = n ? 'none' : '';
+          if (w) el.scrollTop = 0;
+        };
+        q.addEventListener('compositionstart', () => { composing = true; });
+        q.addEventListener('compositionend', () => { composing = false; filt(); });
+        q.addEventListener('input', () => { if (!composing) filt(); });
+        q.addEventListener('keydown', ev => {   // 回车 = 选第一个对上的
+          if (ev.key !== 'Enter' || composing) return;
+          const first = [...el.querySelectorAll('a[data-i]')].find(x => x.style.display !== 'none');
+          if (first) first.click();
+        });
+        q.focus({ preventScroll: true });
+      }
+      el.addEventListener('click', ev => {
+        ev.stopPropagation();
+        const a = ev.target.closest('a[data-i]'); if (!a) return;
+        closePop();
+        if (+a.dataset.i !== sel.selectedIndex) { sel.selectedIndex = +a.dataset.i; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+      });
+    });
+    sync();
+  }
+  document.addEventListener('click', closePop);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closePop(); });
+  addEventListener('resize', closePop);
+  addEventListener('scroll', e => { if (POP && !POP.el.contains(e.target)) closePop(); }, true);
+  document.querySelectorAll('select.inp').forEach(xsel);
+})();
 </script>
 </body>
 </html>
