@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>赫眉 HYMN · 门店工资单</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='6' fill='%23B39A6B'/%3E%3Ctext x='32' y='45' fill='%23fff' font-family='Songti SC,STSong,serif' font-weight='700' font-size='38' text-anchor='middle'%3E%E8%96%AA%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='6' fill='%23B39A6B'/%3E%3Ctext x='32' y='45' fill='%23fff' font-family='Didot,Georgia,serif' font-weight='700' font-size='38' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E">
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="vendor/exceljs.min.js"></script>
 <style>
@@ -96,9 +96,7 @@ button,input,select{font:inherit;color:inherit}
 .hs th:first-child{width:6mm}
 .hs th.pe,.hs td.n{min-width:13mm}
 .hs .t td{font-size:12pt;font-weight:bold;padding:1.8mm}
-.hs .blue{background:#00b0f0}.hs .red{background:#f00;font-weight:normal;font-size:9pt}.hs .nob{border:0}
-.hs th.pe{background:#fce4d6}
-.hs td.green{background:#92d050}
+.hs .red{font-weight:normal;font-size:9pt}.hs .nob{border:0}
 .hs td.n{font-variant-numeric:tabular-nums}.hs td.neg{color:#c00}.hs td.b{font-weight:bold}
 /* ===== A5 工资单（旧竖版样式） ===== */
 .page{width:148mm;height:210mm;background:#fff;border:1px solid var(--line-2);padding:10mm 9mm 8mm;overflow:hidden;position:relative}
@@ -501,14 +499,14 @@ async function exportXlsx() {
     };
     // 第 1 行：蓝底标题 + 红块（应出勤天数）
     ws.mergeCells(1, 1, 1, blue);
-    put(1, 1, DATA.title || '工资单', { size: 14, bold: true, fill: 'FF00B0F0' });
-    if (red) { ws.mergeCells(1, blue + 1, 1, blue + red); put(1, blue + 1, DATA.days || '', { fill: 'FFFF0000' }); }
+    put(1, 1, DATA.title || '工资单', { size: 14, bold: true });
+    if (red) { ws.mergeCells(1, blue + 1, 1, blue + red); put(1, blue + 1, DATA.days || ''); }
     for (let c = blue + red + 1; c <= N; c++) ws.getCell(1, c).border = {};
     ws.getRow(1).height = 26;
     // 第 2 行：表头
     ['', '', '门店', '区域经理', '职位'].forEach((t, i) => put(2, i + 1, t, { bold: true }));
     let peach = false;
-    cols.forEach((c, i) => { if (c === PEACH_FROM) peach = true; if (i === cols.length - 1) peach = false; put(2, 6 + i, c, { bold: true, fill: peach ? 'FFFCE4D6' : undefined }); });
+    cols.forEach((c, i) => { if (c === PEACH_FROM) peach = true; if (i === cols.length - 1) peach = false; put(2, 6 + i, c, { bold: true }); });
     ws.getRow(2).height = 46;
     const NF = '0.00_);[Red]\\(0.00\\)';
     let r = 2;
@@ -517,7 +515,7 @@ async function exportXlsx() {
       put(r, 1, k + 1, { bold: true }); put(r, 2, p.name); put(r, 3, p.store); put(r, 4, p.region); put(r, 5, p.role);
       cols.forEach((c, i) => {
         const v = p.vals[c] || 0;
-        put(r, 6 + i, v === 0 ? null : v, { nf: c === '考勤' ? 'General' : NF, fill: i === 0 ? 'FF92D050' : undefined });
+        put(r, 6 + i, v === 0 ? null : v, { nf: c === '考勤' ? 'General' : NF });
       });
       ws.getRow(r).height = 28;
     });
@@ -530,6 +528,8 @@ async function exportXlsx() {
     });
     ws.getRow(r).height = 28;
     ws.pageSetup.printArea = `A1:${ws.getCell(r, N).address}`;
+    ws.views = [{ state: 'frozen', ySplit: 2 }];          // 头 2 行冻结
+    ws.autoFilter = { from: { row: 2, column: 1 }, to: { row: r - 1, column: N } };   // 第 2 行筛选（不含合计行）
   }
 
   const buf = await wb.xlsx.writeBuffer();
