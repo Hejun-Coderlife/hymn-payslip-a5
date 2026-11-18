@@ -2,7 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>赫眉门店工资单 · A5</title>
+<title>赫眉 HYMN · 门店工资单</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='6' fill='%23B39A6B'/%3E%3Ctext x='32' y='45' fill='%23fff' font-family='Songti SC,STSong,serif' font-weight='700' font-size='38' text-anchor='middle'%3E%E8%96%AA%3C/text%3E%3C/svg%3E">
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="vendor/exceljs.min.js"></script>
 <style>
@@ -170,6 +171,14 @@ button,input,select{font:inherit;color:inherit}
 .page.dense .slip td.v{font-size:9pt}
 @media print{#lb{display:none!important}}
 
+/* 总览：所有门店缩小铺开，一屏看完（2026-11-18 用户） */
+.page .tag{display:none}
+#pages.ov{gap:14px}
+#pages.ov .page{zoom:.42}
+#pages.ov .page .tag{display:block;position:absolute;left:7mm;top:1.2mm;font-size:22px;color:var(--t2);font-family:var(--sans)}
+#pages.ov .page:hover{outline:4px solid var(--acc)}
+#lb .tag{display:none!important}
+@media print{#pages.ov .page{zoom:1}#pages .page .tag{display:none!important}}
 @media (max-width:860px){ .sidebar{position:static;width:auto;border-right:0;border-bottom:1px solid var(--line-2)} .main{margin-left:0} .nav,.sidedata{display:none} }
 @media print{
   @page{size:A5;margin:0}
@@ -194,7 +203,7 @@ button,input,select{font:inherit;color:inherit}
 
 <div class="main"><div class="content">
   <header class="pagehead">
-    <div><div class="eyebrow" id="eyebrow">赫眉 HYMN · 工资</div><h2 id="ttl">门店工资单</h2><p>导入工资总表，每家门店出一张 A5 竖版工资单；全店都为 0 的项目自动不显示</p></div>
+    <div><div class="eyebrow" id="eyebrow">赫眉 HYMN · 工资</div><h2 id="ttl">门店工资单</h2><p>导入工资总表，每家门店出一张 A5 横版工资单；为 0 的数字不显示</p></div>
     <div class="tools">
       <button class="btn ghost" id="pick">重新导入</button>
       <button class="btn" id="btnPrint" disabled>打印 / 存 PDF</button>
@@ -216,7 +225,7 @@ button,input,select{font:inherit;color:inherit}
       <span class="cnt" id="info"></span>
     </div>
     <div class="kpirow" id="kpi"></div>
-    <div class="sec">预览 <span class="tag2">一页一店，A5 实际大小；内容多的店自动缩小放进一页</span></div>
+    <div class="sec">预览 <span class="tag2" id="secTip">一页一店，A5 实际大小；点一张放大看</span><span class="fseg" id="vMode" style="margin-left:auto"><a data-v="page" class="on">逐页</a><a data-v="ov">总览</a></span></div>
     <div id="pages"></div>
   </div>
 </div></div>
@@ -337,9 +346,9 @@ function render() {
   box.innerHTML = '';
   if (!DATA) return;
   const list = visibleStores();
-  for (const g of list) {
+  list.forEach((g, k0) => {
     const cols = colsFor(g), N = 5 + cols.length;
-    const red = Math.min(5, Math.max(0, N - 10)), blue = N - red - Math.min(5, N - red - 5);
+    const red = N >= 10 ? 5 : Math.max(1, N - 6), blue = N - red - Math.min(5, N - red - 5);
     let h = `<table class="hs"><tr class="t"><td colspan="${blue}" class="blue">${esc(DATA.title || '工资单')}</td>`;
     if (red) h += `<td colspan="${red}" class="red">${DATA.days || ''}</td>`;
     if (N - blue - red) h += `<td colspan="${N - blue - red}" class="nob"></td>`;
@@ -360,9 +369,9 @@ function render() {
     h += '</tr></table>';
     const page = document.createElement('div');
     page.className = 'page land';
-    page.innerHTML = `<div class="inner">${h}</div>`;
+    page.innerHTML = `<div class="tag">${k0 + 1}. ${esc(g.store)} · ${g.people.length} 人</div><div class="inner">${h}</div>`;
     box.appendChild(page);
-  }
+  });
   const fit = () => {
     box.querySelectorAll('.page').forEach(pg => {
       const inner = pg.querySelector('.inner'), t = inner.querySelector('table');
@@ -472,7 +481,7 @@ async function exportXlsx() {
   const used = new Set();
   for (const g of visibleStores()) {
     const cols = colsFor(g), N = 5 + cols.length;
-    const red = Math.min(5, Math.max(0, N - 10)), blue = N - red - Math.min(5, N - red - 5);
+    const red = N >= 10 ? 5 : Math.max(1, N - 6), blue = N - red - Math.min(5, N - red - 5);
     let name = g.store.replace(/[\\/?*\[\]:]/g, '').slice(0, 31) || '门店';
     while (used.has(name)) name += '_';
     used.add(name);
@@ -575,6 +584,15 @@ $('#fRegion').onclick = e => {
 };
 $('#showAll').onchange = () => { render(); saveUI(); };
 $('#btnXlsx').onclick = exportXlsx;
+$('#vMode').onclick = e => {
+  const a = e.target.closest('a'); if (!a) return;
+  $('#vMode').querySelectorAll('a').forEach(x => x.classList.toggle('on', x === a));
+  const ov = a.dataset.v === 'ov';
+  $('#pages').classList.toggle('ov', ov);
+  $('#secTip').textContent = ov ? '所有门店缩小显示，点一张放大看（← → 翻页）' : '一页一店，A5 实际大小；点一张放大看';
+  localStorage.setItem(LS_KEY + '-v', a.dataset.v);
+};
+if (localStorage.getItem(LS_KEY + '-v') === 'ov') $('#vMode [data-v="ov"]').click();
 $('#btnPrint').onclick = () => window.print();
 
 // 刷新后恢复
