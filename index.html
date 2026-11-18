@@ -6,77 +6,171 @@
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="vendor/exceljs.min.js"></script>
 <style>
-  :root { --pink:#eaa8b1; --ink:#2b2b2b; --mute:#8a8a8a; --line:#d9d9d9; }
-  * { box-sizing:border-box; }
-  body { margin:0; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; color:var(--ink); background:#f3f1f0; }
-  header.bar { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid #eee; padding:12px 24px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
-  header.bar h1 { font-size:17px; margin:0 12px 0 0; font-weight:600; }
-  header.bar h1 b { color:var(--pink); }
-  .btn { border:1px solid #ddd; background:#fff; border-radius:8px; padding:7px 14px; font-size:14px; cursor:pointer; }
-  .btn.primary { background:var(--pink); border-color:var(--pink); color:#fff; }
-  .btn:disabled { opacity:.4; cursor:default; }
-  select { border:1px solid #ddd; border-radius:8px; padding:6px 8px; font-size:14px; background:#fff; }
-  label.chk { font-size:14px; display:flex; align-items:center; gap:5px; cursor:pointer; }
-  .info { font-size:13px; color:var(--mute); margin-left:auto; }
-  #drop { margin:60px auto; width:520px; border:2px dashed var(--pink); border-radius:16px; background:#fff; padding:50px 30px; text-align:center; cursor:pointer; }
-  #drop.over { background:#fdf1f3; }
-  #drop p { margin:6px 0; color:var(--mute); font-size:14px; }
-  #drop p.big { font-size:18px; color:var(--ink); }
-  #pages { display:flex; flex-wrap:wrap; gap:24px; padding:24px; justify-content:center; }
+/* 视觉照 vip.hemei.asia：白底、发丝线、直角无阴影，Didot 只给数字，宋体给标题，香槟金 = 交互色 */
+:root{
+  --bg:#FFFFFF; --paper:#FAFAF8; --line:#F0EDE6; --line-2:#E3DFD6; --chip:#DAD4C8;
+  --ink:#16140F; --t1:#16140F; --t2:#4A453C; --t3:#9C958A; --t4:#B4ADA1;
+  --pink:#D9A6AE; --pink-deep:#B9808B;
+  --acc:#B39A6B; --acc-dk:#9C845A; --nav-w:214px;
+  --sans:-apple-system,"SF Pro Text","PingFang SC",system-ui,sans-serif;
+  --num:Didot,"Bodoni 72",Georgia,"Songti SC",serif;
+  --song:"Songti SC","STSong",Didot,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--t1);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
 
-  /* ===== A5 页面 ===== */
-  .page { width:148mm; height:210mm; background:#fff; box-shadow:0 2px 10px rgba(0,0,0,.08); padding:8mm 7mm; overflow:hidden; position:relative; }
-  .page .inner { transform-origin:top left; }
-  .page.land { width:210mm; height:148mm; }
-  .slip { width:100%; border-collapse:collapse; font-family:"SimSun","Songti SC",serif; font-size:9.5pt; table-layout:fixed; }
-  .slip td, .slip th { border:0.6pt solid #000; padding:1.2mm 1.5mm; line-height:1.25; }
-  .slip .ttl { background:#00b0f0; font-size:14pt; font-weight:bold; text-align:center; padding:2mm; }
-  .slip .meta { font-size:9pt; border-left:none; border-right:none; border-top:none; padding:1.5mm 0; }
-  .slip .meta span { margin-right:5mm; }
-  .slip th { background:#fce4d6; font-weight:bold; text-align:center; }
-  .slip td.k { background:#fce4d6; text-align:left; }
-  .slip td.v { text-align:right; font-variant-numeric:tabular-nums; }
-  .slip td.v.zero { color:#b5b5b5; }
-  .slip td.v.neg { color:#c00; }
-  .slip td.sum { background:#f7f7f7; }
-  .slip tr.net td { font-weight:bold; background:#fff2cc; font-size:10.5pt; }
-  .slip tr.net td.k { background:#fff2cc; }
-  .slip tr.infor td { font-size:8pt; text-align:center; word-break:break-all; }
-  .slip tr.infor td.k { text-align:left; }
-  .slip tr.sign td { height:11mm; }
-  .page .foot { position:absolute; right:7mm; bottom:4mm; font-size:7pt; color:#aaa; }
+/* 左侧栏 */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--nav-w);border-right:1px solid var(--line-2);display:flex;flex-direction:column;background:#fff;z-index:10}
+.sidebar .logo{padding:34px 22px 26px;border-bottom:1px solid var(--line-2)}
+.sidebar .logo .lk{display:inline-block}
+.sidebar .logo img{height:30px;display:block}
+.sidebar .logo .st{font-size:11px;font-weight:600;margin-top:10px;line-height:1;display:flex;justify-content:space-between;
+  background:linear-gradient(100deg,#16140F 0%,#16140F 40%,#C9A15A 48%,#F0D9A8 50%,#C9A15A 52%,#16140F 60%,#16140F 100%);
+  background-size:300% 100%;background-position:100% 0;-webkit-background-clip:text;background-clip:text;color:transparent;animation:lgsw 5s ease-in-out .8s infinite}
+@keyframes lgsw{0%{background-position:100% 0}40%,100%{background-position:0 0}}
+.nav{padding:10px 0;flex:1}
+.nav .grp{font-size:11px;color:var(--t4);padding:22px 22px 9px}
+.nav a{position:relative;display:flex;align-items:center;gap:12px;padding:11px 22px;font-size:13.5px;color:var(--t1);font-weight:600}
+.nav a::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:2px;height:16px;background:var(--acc)}
+.nav a svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.2}
+.sidedata{padding:18px 22px;border-top:1px solid var(--line-2);font-size:11.5px;color:var(--t3);line-height:1.9;word-break:break-all}
+.sidedata b{color:var(--t1);font-weight:600}
+.sidedata a{cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 
-  @media print {
-    @page { size:A5; margin:0; }
-    @page land { size:A5 landscape; margin:0; }
-    body { background:#fff; }
-    header.bar, #drop, .noprint { display:none !important; }
-    #pages { display:block; padding:0; }
-    .page { box-shadow:none; break-after:page; page-break-after:always; }
-    .page.land { page:land; }
-    .page .foot { display:none; }
-  }
+.main{margin-left:var(--nav-w);min-height:100vh}
+.content{padding:34px 38px 72px;max-width:1500px}
+.pagehead{position:relative;display:flex;align-items:flex-end;gap:16px;margin:0 0 28px;padding-bottom:18px;flex-wrap:wrap;border-bottom:1px solid var(--line-2)}
+.eyebrow{font-size:10.5px;letter-spacing:.2em;color:var(--t3);margin-bottom:10px}
+.pagehead h2{font-family:var(--song);font-size:24px;line-height:1.4;font-weight:400;letter-spacing:.06em}
+.pagehead p{font-size:12.5px;color:var(--t3);margin-top:10px}
+.pagehead .tools{margin-left:auto;display:flex;gap:10px;align-items:center}
+
+.btn{border:1px solid var(--ink);background:transparent;min-height:40px;padding:10px 20px;font-size:12.5px;letter-spacing:.06em;cursor:pointer;white-space:nowrap;transition:background .2s,color .2s,border-color .2s}
+.btn:hover{background:var(--ink);color:#fff}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.primary:hover{background:var(--acc-dk);border-color:var(--acc-dk)}
+.btn.ghost{border-color:var(--line-2);color:var(--t2)}
+.btn.ghost:hover{border-color:var(--ink);background:var(--ink);color:#fff}
+.btn[disabled]{opacity:.4;pointer-events:none}
+
+.filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:22px}
+.fseg{display:inline-flex;align-items:center;gap:2px;padding:3px;background:#F2F0EB;height:36px}
+.fseg > a{display:flex;align-items:center;height:30px;padding:0 13px;font-size:13px;color:var(--t3);cursor:pointer;white-space:nowrap}
+.fseg > a:hover{color:var(--t1)}
+.fseg > a.on{background:#fff;color:var(--t1);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.inp{height:36px;border:1px solid var(--line-2);background:#fff;padding:0 30px 0 12px;font-size:13px;-webkit-appearance:none;appearance:none;
+  background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6' fill='none' stroke='%2316140F'/%3E%3C/svg%3E") no-repeat right 11px center}
+.inp:focus{outline:none;border-color:var(--ink)}
+.tgl{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--t2);cursor:pointer;user-select:none}
+.tgl input{appearance:none;-webkit-appearance:none;width:14px;height:14px;border:1px solid var(--chip);background:#fff;cursor:pointer;position:relative}
+.tgl input:checked{background:var(--acc);border-color:var(--acc)}
+.tgl input:checked::after{content:'';position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+.filters .cnt{margin-left:auto;font-size:12px;color:var(--t3)}
+
+.kpirow{display:flex;margin-bottom:30px;flex-wrap:wrap;border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2)}
+.kpi{border-left:1px solid var(--line);padding:22px 26px;flex:1;min-width:160px}
+.kpi:first-child{border-left:0;padding-left:0}
+.kpi .lab{font-size:11.5px;letter-spacing:.14em;color:var(--t3)}
+.kpi .val{font-family:var(--num);font-size:38px;line-height:1.05;margin-top:12px;font-variant-numeric:tabular-nums}
+.kpi .val small{font-family:var(--sans);font-size:13px;color:var(--t3);margin-left:4px}
+.kpi .sub{font-size:11.5px;color:var(--t4);margin-top:6px}
+.kpi.p .val{color:var(--pink-deep)}
+
+.drop{display:block;border:1px dashed var(--chip);padding:70px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s}
+.drop:hover,.drop.over{border-color:var(--ink);background:var(--paper)}
+.drop > b{font-family:var(--song);font-weight:400;font-size:18px;letter-spacing:.08em;display:block}
+.drop span{display:block;font-size:12.5px;color:var(--t3);margin-top:10px;line-height:1.8}
+
+.sec{font-family:var(--song);font-size:17px;font-weight:400;letter-spacing:.1em;margin-bottom:14px;display:flex;align-items:baseline;gap:12px}
+.sec .tag2{font-family:var(--sans);font-size:12px;color:var(--t3);letter-spacing:0}
+#pages{display:flex;flex-wrap:wrap;gap:28px;padding:28px;background:var(--paper);border-top:1px solid var(--acc)}
+
+/* ===== A5 工资单 ===== */
+.page{width:148mm;height:210mm;background:#fff;border:1px solid var(--line-2);padding:10mm 9mm 8mm;overflow:hidden;position:relative}
+.page.land{width:210mm;height:148mm}
+.page .inner{transform-origin:top left}
+.sh{display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:3.2mm;border-bottom:0.4mm solid var(--ink)}
+.sh img{height:6.2mm;display:block}
+.sh .r{text-align:right}
+.sh .r .t{font-family:var(--song);font-size:13pt;letter-spacing:.12em}
+.sh .r .s{font-size:7pt;letter-spacing:.2em;color:var(--t3);margin-top:1mm}
+.meta{display:flex;gap:7mm;padding:2.6mm 0 3mm;font-size:8.5pt;color:var(--t2)}
+.meta b{font-weight:600;color:var(--t1)}
+.meta .num{font-size:10pt}
+.slip{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt}
+.slip th{font-weight:600;font-size:8.5pt;color:var(--t1);text-align:right;padding:1.8mm 1.6mm;border-bottom:0.25mm solid var(--acc);background:var(--paper)}
+.slip th.k{text-align:left;font-weight:400;color:var(--t3);letter-spacing:.1em;font-size:7.5pt}
+.slip td{padding:1.15mm 1.6mm;border-bottom:0.2mm solid var(--line);line-height:1.3}
+.slip td.k{color:var(--t2);font-size:8pt}
+.slip td.v{text-align:right;font-family:var(--num);font-size:9.5pt;font-variant-numeric:tabular-nums}
+.slip td.v.zero{color:var(--t4)}
+.slip td.v.neg{color:var(--pink-deep)}
+.slip td.sum,.slip th.sum{background:var(--paper)}
+.slip tr.role td{font-size:7.5pt;color:var(--t3);text-align:right;border-bottom-color:var(--line-2)}
+.slip tr.role td.k{text-align:left}
+.slip tr.net td{border-top:0.3mm solid var(--ink);border-bottom:0.3mm solid var(--ink);padding:2.2mm 1.6mm;background:#FAF7F1}
+.slip tr.net td.k{font-family:var(--song);font-size:10pt;color:var(--t1);letter-spacing:.2em}
+.slip tr.net td.v{font-size:12.5pt;color:var(--t1)}
+.slip tr.gap td{border:0;padding:1.6mm 0}
+.slip tr.infor td{font-size:7pt;color:var(--t3);text-align:right;word-break:break-all;font-variant-numeric:tabular-nums}
+.slip tr.infor td.k{text-align:left;font-size:7.5pt}
+.slip tr.sign td{height:12mm;border-bottom:0.2mm solid var(--line-2);vertical-align:bottom}
+.slip tr.sign td.k{color:var(--t1);font-size:8pt}
+.page .foot{position:absolute;left:9mm;right:9mm;bottom:5mm;display:flex;justify-content:space-between;font-size:6.5pt;color:var(--t4);letter-spacing:.1em}
+
+@media (max-width:860px){ .sidebar{position:static;width:auto;border-right:0;border-bottom:1px solid var(--line-2)} .main{margin-left:0} .nav,.sidedata{display:none} }
+@media print{
+  @page{size:A5;margin:0}
+  @page land{size:A5 landscape;margin:0}
+  .sidebar,.pagehead,.filters,.kpirow,.drop,.sec{display:none!important}
+  .main{margin:0}.content{padding:0}
+  #pages{display:block;padding:0;background:#fff;border:0}
+  .page{border:0;break-after:page;page-break-after:always}
+  .page.land{page:land}
+}
 </style>
 </head>
 <body>
-<header class="bar">
-  <h1>赫眉门店工资单 <b>A5</b></h1>
-  <button class="btn" id="pick">导入工资总表</button>
-  <select id="fRegion"><option value="">全部区域经理</option></select>
-  <select id="fStore"><option value="">全部门店</option></select>
-  <label class="chk"><input type="checkbox" id="showAll"> 显示全为 0 的项目</label>
-  <button class="btn primary" id="btnXlsx" disabled>导出 Excel</button>
-  <button class="btn" id="btnPrint" disabled>打印 / 存 PDF</button>
-  <span class="info" id="info"></span>
-  <input type="file" id="file" accept=".xlsx" hidden>
-</header>
+<aside class="sidebar">
+  <div class="logo"><div class="lk"><img src="vendor/logo-ink.png" alt="赫眉 HYMN"><div class="st"><span>门</span><span>店</span><span>工</span><span>资</span><span>单</span></div></div></div>
+  <nav class="nav">
+    <div class="grp">工资</div>
+    <a><svg viewBox="0 0 22 22"><path d="M4.5 3.5h10.5a2 2 0 0 1 2 2v13H6.5a2 2 0 0 1-2-2z"/><path d="M8 8.5h6M8 11.5h6M8 14.5h3.5"/></svg>A5 工资单</a>
+  </nav>
+  <div class="sidedata" id="sidedata">还没导入</div>
+</aside>
 
-<div id="drop">
-  <p class="big">把工资总表 .xlsx 拖到这里</p>
-  <p>读取第一个工资表（含「门店」「实发」表头的 sheet）</p>
-  <p>每家门店生成一张 A5 竖版工资单，全店都为 0 的项目自动隐藏</p>
-</div>
-<div id="pages"></div>
+<div class="main"><div class="content">
+  <header class="pagehead">
+    <div><div class="eyebrow" id="eyebrow">赫眉 HYMN · 工资</div><h2 id="ttl">门店工资单</h2><p>导入工资总表，每家门店出一张 A5 竖版工资单；全店都为 0 的项目自动不显示</p></div>
+    <div class="tools">
+      <button class="btn ghost" id="pick">重新导入</button>
+      <button class="btn" id="btnPrint" disabled>打印 / 存 PDF</button>
+      <button class="btn primary" id="btnXlsx" disabled>导出 Excel</button>
+    </div>
+  </header>
+
+  <label class="drop" id="drop">
+    <b>工资总表</b>
+    <span>拖到这里，或点一下选文件<br>读含「门店」「实发」表头的那张表（如「9月工资」）</span>
+  </label>
+  <input type="file" id="file" accept=".xlsx" hidden>
+
+  <div id="view" hidden>
+    <div class="filters">
+      <span class="fseg" id="fRegion"></span>
+      <select class="inp" id="fStore"><option value="">全部门店</option></select>
+      <label class="tgl"><input type="checkbox" id="showAll"> 显示全为 0 的项目</label>
+      <span class="cnt" id="info"></span>
+    </div>
+    <div class="kpirow" id="kpi"></div>
+    <div class="sec">预览 <span class="tag2">一页一店，A5 实际大小；内容多的店自动缩小放进一页</span></div>
+    <div id="pages"></div>
+  </div>
+</div></div>
 
 <script>
 const LS_KEY = 'hymn-payslip-a5';
@@ -87,7 +181,9 @@ const NO_SUM = ['考勤'];
 // 实发之后这些列作为员工信息显示在底部
 const INFO = ['入职时间', '离职', '司龄', '银行卡'];
 
-let DATA = null;   // {title, days, items:[label], info:[label], people:[{name,store,region,role,vals:{},info:{}}]}
+let DATA = null;
+let REGION = '';
+let FILE = '';   // {title, days, items:[label], info:[label], people:[{name,store,region,role,vals:{},info:{}}]}
 const $ = s => document.querySelector(s);
 
 /* ---------- 读取 ---------- */
@@ -168,7 +264,7 @@ function stores() {
   return [...map.values()];
 }
 function visibleStores() {
-  const r = $('#fRegion').value, s = $('#fStore').value;
+  const r = REGION, s = $('#fStore').value;
   return stores().filter(g => (!r || g.region === r) && (!s || g.store === s));
 }
 function rowsFor(g) {
@@ -186,58 +282,71 @@ function render() {
   box.innerHTML = '';
   if (!DATA) return;
   const list = visibleStores();
+  const m = (DATA.title || '').match(/(\d{4})年(\d{1,2})月/);
+  const period = m ? `${m[1]} · ${m[2].padStart(2, '0')}` : '';
   for (const g of list) {
     const { items, info } = rowsFor(g);
     const multi = g.people.length > 1;
     const nCols = g.people.length + (multi ? 1 : 0);
     const land = nCols > 6;
-    const labelW = land ? 22 : 30;
+    const labelW = land ? 20 : 29;
     const cols = `<col style="width:${labelW}%">` + `<col>`.repeat(nCols);
-    const span = nCols + 1;
-    let h = `<table class="slip"><colgroup>${cols}</colgroup>`;
-    h += `<tr><td class="ttl" colspan="${span}">${esc(DATA.title || '工资单')}</td></tr>`;
-    h += `<tr><td class="meta" colspan="${span}"><span>门店：${esc(g.store)}</span><span>区域经理：${esc(g.region)}</span>${DATA.days ? `<span>应出勤：${DATA.days} 天</span>` : ''}</td></tr>`;
-    h += `<tr><th>项目</th>${g.people.map(p => `<th>${esc(p.name)}</th>`).join('')}${multi ? '<th>合计</th>' : ''}</tr>`;
-    h += `<tr class="infor"><td class="k">职位</td>${g.people.map(p => `<td>${esc(p.role)}</td>`).join('')}${multi ? '<td></td>' : ''}</tr>`;
+    const cell = (v, extra = '') => `<td class="v${v === 0 ? ' zero' : ''}${v < 0 ? ' neg' : ''}${extra}">${fmt(v)}</td>`;
+    let h = `<div class="sh"><img src="vendor/logo-ink.png" alt="赫眉 HYMN"><div class="r"><div class="t">${m ? `${+m[2]} 月工资单` : esc(DATA.title || '工资单')}</div><div class="s">PAYSLIP${period ? ' · ' + period : ''}</div></div></div>`;
+    h += `<div class="meta"><span>门店 <b>${esc(g.store)}</b></span><span>区域经理 <b>${esc(g.region)}</b></span>${DATA.days ? `<span>应出勤 <b class="num">${DATA.days}</b> 天</span>` : ''}</div>`;
+    h += `<table class="slip"><colgroup>${cols}</colgroup>`;
+    h += `<tr><th class="k">项目</th>${g.people.map(p => `<th>${esc(p.name)}</th>`).join('')}${multi ? '<th class="sum">合计</th>' : ''}</tr>`;
+    h += `<tr class="role"><td class="k">职位</td>${g.people.map(p => `<td>${esc(p.role || '—')}</td>`).join('')}${multi ? '<td class="sum"></td>' : ''}</tr>`;
     for (const it of items) {
       const vs = g.people.map(p => p.vals[it]);
       const sum = vs.reduce((a, b) => a + b, 0);
-      const cell = (v, extra = '') => `<td class="v${v === 0 ? ' zero' : ''}${v < 0 ? ' neg' : ''}${extra}">${fmt(v)}</td>`;
       h += `<tr${it === '实发' ? ' class="net"' : ''}><td class="k">${esc(it)}</td>${vs.map(v => cell(v)).join('')}${multi ? (NO_SUM.includes(it) ? '<td class="sum"></td>' : cell(sum, ' sum')) : ''}</tr>`;
     }
+    h += `<tr class="gap"><td colspan="${nCols + 1}"></td></tr>`;
     for (const it of info) {
       h += `<tr class="infor"><td class="k">${esc(it)}</td>${g.people.map(p => `<td>${esc(p.info[it] || '')}</td>`).join('')}${multi ? '<td></td>' : ''}</tr>`;
     }
-    h += `<tr class="sign"><td class="k">本人签字</td>${g.people.map(() => '<td></td>').join('')}${multi ? '<td style="background:#f7f7f7"></td>' : ''}</tr>`;
+    h += `<tr class="sign"><td class="k">本人签字</td>${g.people.map(() => '<td></td>').join('')}${multi ? '<td></td>' : ''}</tr>`;
     h += `</table>`;
 
     const page = document.createElement('div');
     page.className = 'page' + (land ? ' land' : '');
-    page.innerHTML = `<div class="inner">${h}</div><div class="foot">${items.length} 项</div>`;
+    page.innerHTML = `<div class="inner">${h}</div><div class="foot"><span>赫眉 HYMN</span><span>${esc(g.store)} · ${items.length} 项</span></div>`;
     box.appendChild(page);
   }
-  // 内容超出一页时整体缩小
-  requestAnimationFrame(() => {
+  // 内容超出一页时整体缩小（留出页脚）
+  const fit = () => {
+    let n = 0;
     box.querySelectorAll('.page').forEach(pg => {
       const inner = pg.querySelector('.inner');
       inner.style.zoom = 1;
-      const avail = pg.clientHeight - parseFloat(getComputedStyle(pg).paddingTop) * 2;
-      const need = inner.scrollHeight;
-      if (need > avail) inner.style.zoom = (avail / need).toFixed(3);
+      const cs = getComputedStyle(pg);
+      const avail = pg.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 18;
+      const need = inner.getBoundingClientRect().height;
+      if (need > avail) { inner.style.zoom = (avail / need * 0.99).toFixed(3); n++; }
     });
-  });
-  $('#info').textContent = `${list.length} 家门店 · ${list.reduce((a, g) => a + g.people.length, 0)} 人`;
+    const el = $('#zoomNote'); if (el) el.textContent = n ? `${n} 家店项目多，已缩小` : '全部原大小放得下';
+  };
+  document.fonts.ready.then(() => requestAnimationFrame(fit));
+
+  const nP = list.reduce((a, g) => a + g.people.length, 0);
+  const net = list.reduce((a, g) => a + g.people.reduce((b, p) => b + (p.vals['实发'] || 0), 0), 0);
+    $('#kpi').innerHTML =
+    `<div class="kpi"><div class="lab">门店</div><div class="val">${list.length}<small>家</small></div><div class="sub">= ${list.length} 张 A5</div></div>` +
+    `<div class="kpi"><div class="lab">员工</div><div class="val">${nP}<small>人</small></div><div class="sub">每店 ${Math.min(...list.map(g => g.people.length))}–${Math.max(...list.map(g => g.people.length))} 人</div></div>` +
+    `<div class="kpi p"><div class="lab">实发合计</div><div class="val">${net.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}<small>元</small></div><div class="sub">${REGION || $('#fStore').value || '全部门店'}</div></div>` +
+    `<div class="kpi"><div class="lab">应出勤</div><div class="val">${DATA.days || '—'}<small>天</small></div><div class="sub" id="zoomNote"></div></div>`;
+  $('#info').textContent = `${list.length} 家门店 · ${nP} 人`;
 }
 
 function fillFilters() {
   const regions = [...new Set(DATA.people.map(p => p.region).filter(Boolean))];
-  const keepR = $('#fRegion').value, keepS = $('#fStore').value;
-  $('#fRegion').innerHTML = '<option value="">全部区域经理</option>' + regions.map(r => `<option>${esc(r)}</option>`).join('');
-  if (regions.includes(keepR)) $('#fRegion').value = keepR;
-  fillStores(keepS);
+  if (!regions.includes(REGION)) REGION = '';
+  $('#fRegion').innerHTML = ['', ...regions].map(r => `<a data-r="${esc(r)}"${r === REGION ? ' class="on"' : ''}>${r ? esc(r) : '全部'}</a>`).join('');
+  fillStores($('#fStore').value);
 }
 function fillStores(keep) {
-  const r = $('#fRegion').value;
+  const r = REGION;
   const list = stores().filter(g => !r || g.region === r).map(g => g.store);
   $('#fStore').innerHTML = '<option value="">全部门店</option>' + list.map(s => `<option>${esc(s)}</option>`).join('');
   if (list.includes(keep)) $('#fStore').value = keep;
@@ -246,11 +355,11 @@ function fillStores(keep) {
 /* ---------- 导出 Excel ---------- */
 async function exportXlsx() {
   const wb = new ExcelJS.Workbook();
-  const thin = { style: 'thin', color: { argb: 'FF000000' } };
+  const thin = { style: 'thin', color: { argb: 'FFD9D4CA' } };
   const border = { top: thin, left: thin, bottom: thin, right: thin };
-  const peach = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } };
-  const yellow = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
-  const gray = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7F7F7' } };
+  const peach = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F0EB' } };
+  const yellow = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5EEDF' } };
+  const gray = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAF8' } };
   const font = (o = {}) => ({ name: '宋体', size: 10, ...o });
   const used = new Set();
 
@@ -278,7 +387,7 @@ async function exportXlsx() {
     t.value = DATA.title || '工资单';
     t.font = font({ size: 14, bold: true });
     t.alignment = { horizontal: 'center', vertical: 'middle' };
-    t.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00B0F0' } };
+    t.border = { bottom: { style: 'medium', color: { argb: 'FF16140F' } } };
     ws.getRow(1).height = 26;
     ws.mergeCells(2, 1, 2, nCols);
     ws.getCell(2, 1).value = `门店：${g.store}    区域经理：${g.region}` + (DATA.days ? `    应出勤：${DATA.days} 天` : '');
@@ -300,7 +409,7 @@ async function exportXlsx() {
     g.people.forEach((p, i) => put(r, 2 + i, p.name, { font: { bold: true }, fill: peach }));
     if (multi) put(r, nCols, '合计', { font: { bold: true }, fill: peach });
     r++;
-    put(r, 1, '职位', { fill: peach, align: 'left' });
+    put(r, 1, '职位', { align: 'left', font: { color: { argb: 'FF9C958A' } } });
     g.people.forEach((p, i) => put(r, 2 + i, p.role, { font: { size: 9 } }));
     if (multi) put(r, nCols, '');
     const NF = '#,##0.00;[Red]-#,##0.00';
@@ -308,7 +417,7 @@ async function exportXlsx() {
       r++;
       const net = it === '实发';
       const f = net ? { bold: true, size: 11 } : {};
-      put(r, 1, it, { fill: net ? yellow : peach, align: 'left', font: f });
+      put(r, 1, it, { fill: net ? yellow : undefined, align: 'left', font: f });
       g.people.forEach((p, i) => put(r, 2 + i, p.vals[it], { numFmt: NF, align: 'right', font: f, fill: net ? yellow : undefined }));
       if (multi && NO_SUM.includes(it)) put(r, nCols, '', { fill: gray });
       else if (multi) {
@@ -319,12 +428,12 @@ async function exportXlsx() {
     }
     for (const it of info) {
       r++;
-      put(r, 1, it, { fill: peach, align: 'left' });
+      put(r, 1, it, { align: 'left', font: { size: 9, color: { argb: 'FF9C958A' } } });
       g.people.forEach((p, i) => put(r, 2 + i, p.info[it] || '', { font: { size: 8 }, wrap: true }));
       if (multi) put(r, nCols, '');
     }
     r++;
-    put(r, 1, '本人签字', { fill: peach, align: 'left' });
+    put(r, 1, '本人签字', { align: 'left' });
     for (let c = 2; c <= nCols; c++) put(r, c, '', c === nCols && multi ? { fill: gray } : {});
     ws.getRow(r).height = 32;
     for (let i = 3; i < r; i++) ws.getRow(i).height = 16;
@@ -335,7 +444,7 @@ async function exportXlsx() {
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  const s = $('#fStore').value || $('#fRegion').value || '全部门店';
+  const s = $('#fStore').value || REGION || '全部门店';
   a.download = `${(DATA.title || '工资单').replace(/[\\/:*?"<>|]/g, '')}_${s}_A5.xlsx`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -345,6 +454,7 @@ async function exportXlsx() {
 async function load(file) {
   try {
     DATA = await readWorkbook(await file.arrayBuffer());
+    DATA.file = FILE = file.name;
     try { localStorage.setItem(LS_KEY, JSON.stringify(DATA)); } catch (e) {}
     ready();
   } catch (e) {
@@ -352,13 +462,17 @@ async function load(file) {
   }
 }
 function ready() {
-  $('#drop').style.display = 'none';
+  $('#drop').hidden = true;
+  $('#view').hidden = false;
+  $('#eyebrow').textContent = '赫眉 HYMN · ' + (DATA.title || '工资');
+  $('#sidedata').innerHTML = `已导入<br><b>${esc(FILE || DATA.file || '工资总表')}</b><br>${DATA.people.length} 人 · ${stores().length} 家店<br><a id="clr">清空</a>`;
+  $('#clr').onclick = () => { localStorage.removeItem(LS_KEY); location.reload(); };
   $('#btnXlsx').disabled = $('#btnPrint').disabled = false;
   fillFilters();
   render();
 }
 function saveUI() {
-  localStorage.setItem(LS_KEY + '-ui', JSON.stringify({ r: $('#fRegion').value, s: $('#fStore').value, all: $('#showAll').checked }));
+  localStorage.setItem(LS_KEY + '-ui', JSON.stringify({ r: REGION, s: $('#fStore').value, all: $('#showAll').checked }));
 }
 
 $('#pick').onclick = () => $('#file').click();
@@ -370,7 +484,12 @@ document.addEventListener('drop', e => {
   e.preventDefault(); $('#drop').classList.remove('over');
   const f = e.dataTransfer.files[0]; if (f) load(f);
 });
-$('#fRegion').onchange = () => { fillStores(''); render(); saveUI(); };
+$('#fRegion').onclick = e => {
+  const a = e.target.closest('a'); if (!a) return;
+  REGION = a.dataset.r;
+  $('#fRegion').querySelectorAll('a').forEach(x => x.classList.toggle('on', x === a));
+  fillStores(''); render(); saveUI();
+};
 $('#fStore').onchange = () => { render(); saveUI(); };
 $('#showAll').onchange = () => { render(); saveUI(); };
 $('#btnXlsx').onclick = exportXlsx;
@@ -384,7 +503,7 @@ try {
     DATA = saved;
     $('#showAll').checked = !!ui.all;
     fillFilters();
-    if (ui.r) { $('#fRegion').value = ui.r; fillStores(ui.s); }
+    if (ui.r) { REGION = ui.r; fillFilters(); fillStores(ui.s); }
     else if (ui.s) $('#fStore').value = ui.s;
     ready();
   }
