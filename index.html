@@ -605,6 +605,7 @@ async function load(file) {
   try {
     DATA = await readWorkbook(await file.arrayBuffer());
     DATA.file = FILE = file.name;
+    SEL.clear(); saveUI();   // 换表后清掉上次勾选的门店，免得只显示旧勾选的几家
     try { localStorage.setItem(LS_KEY, JSON.stringify(DATA)); } catch (e) {}
     ready();
   } catch (e) {
