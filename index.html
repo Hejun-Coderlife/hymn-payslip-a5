@@ -570,11 +570,14 @@ async function downloadTemplate() {
   // 第 1 行：标题 + 应出勤天数
   ws.mergeCells(1, 1, 1, 5);
   Object.assign(ws.getCell(1, 1), { value: '2026年X月赫眉工资单', font: { ...font, size: 14, bold: true } });
-  Object.assign(ws.getCell(1, 6), { value: '应出勤天数', font });
-  ws.getCell(1, 7).font = { ...font, bold: true };
-  ws.getCell(1, 7).border = { bottom: { style: 'thin' } };
-  ws.getCell(1, 8).value = '← 填天数（数字）';
-  ws.getCell(1, 8).font = { ...font, color: { argb: 'FF999999' } };
+  // F1:G1 写「应出勤天数」，H1 方框里填数字，I1 起是提示
+  ws.mergeCells(1, 6, 1, 7);
+  Object.assign(ws.getCell(1, 6), { value: '应出勤天数', font, alignment: { horizontal: 'right', vertical: 'middle' } });
+  const box = { style: 'medium', color: { argb: 'FF000000' } };
+  Object.assign(ws.getCell(1, 8), { font: { ...font, size: 12, bold: true }, alignment: { horizontal: 'center', vertical: 'middle' },
+    border: { top: box, left: box, bottom: box, right: box } });
+  ws.mergeCells(1, 9, 1, 12);
+  Object.assign(ws.getCell(1, 9), { value: '← 在方框里填天数（只填数字，如 26）', font: { ...font, color: { argb: 'FF999999' } }, alignment: { vertical: 'middle' } });
   ws.getRow(1).height = 26;
   // 第 2 行：表头（浅灰底、加粗、按字数均分换行）
   hdr.forEach((h, i) => {
