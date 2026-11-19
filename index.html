@@ -381,7 +381,7 @@ function render() {
     h += `</tr><tr class="hd"><th>序号</th><th>姓名</th><th>门店</th><th>区域经理</th><th>职位</th>`;
     let peach = false;
     cols.forEach((c, i) => { if (c === PEACH_FROM) peach = true; if (i === cols.length - 1) peach = false; h += `<th${peach ? ' class="pe"' : ''}>${esc(wrapEven(c, 8.5)).replace(/\n/g, '<br>')}</th>`; });
-    h += `<th>${esc(wrapEven('社保门店', 8.5)).replace(/\n/g, '<br>')}</th></tr>`;
+    h += '<th>社保<br>门店</th></tr>';
     g.people.forEach((p, k) => {
       h += `<tr><td class="b">${k + 1}</td><td>${esc(p.name)}</td><td>${esc(p.store)}</td><td>${esc(p.region)}</td><td>${esc(p.role)}</td>`;
       cols.forEach((c, i) => {
@@ -517,7 +517,7 @@ async function exportXlsx() {
       pageSetup: { paperSize: 11, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 1,
         horizontalCentered: true, margins: { left: 0.25, right: 0.25, top: 0.4, bottom: 0.4, header: 0.1, footer: 0.1 } },
     });
-    const W = c => c === 1 ? 5 : c === 3 || c === N ? 12 : c <= 5 ? 9 : 8.5;
+    const W = c => c === 1 ? 5 : c === 3 ? 12 : c === N ? 8 : c <= 5 ? 9 : 8.5;   // 社保门店列收窄到 8，少挤压打印字号
     let tw = 0; for (let c = 1; c <= N; c++) tw += W(c);
     const kw = Math.max(1, 100 / tw);   // 列少时把列加宽到接近 A5 横版纸宽
     for (let c = 1; c <= N; c++) ws.getColumn(c).width = +(W(c) * kw).toFixed(1);
@@ -537,7 +537,7 @@ async function exportXlsx() {
     // 第 2 行：表头
     ['序号', '姓名', '门店', '区域经理', '职位'].forEach((t, i) => put(2, i + 1, t, { bold: true, fill: 'FFF2F2F2' }));   // 第 2 行浅灰底
     cols.forEach((c, i) => put(2, 6 + i, wrapEven(c, ws.getColumn(6 + i).width), { bold: true, fill: 'FFF2F2F2' }));
-    put(2, N, '社保门店', { bold: true, fill: 'FFF2F2F2' });
+    put(2, N, '社保\n门店', { bold: true, fill: 'FFF2F2F2' });
     ws.getRow(2).height = 46;
     const NF = '0.00_);[Red]\\(0.00\\)';
     let r = 2;
